@@ -1,5 +1,4 @@
 services:
-
   nats: 
     image: nats:2.10.24-alpine3.21
     command: "-js"
@@ -15,9 +14,10 @@ services:
       start_period: 5s
 
   apisix: 
-    image: apache/apisix:latest
+    image: apache/apisix:3.11.0-redhat
     ports:
       - "9080:9080"
+      - "9180:9180"
     volumes: 
       - ./apisix/:/usr/local/apisix/conf:rw
     networks:
@@ -28,6 +28,8 @@ services:
     depends_on:
       etcd:
         condition: service_healthy
+      api-server:
+        condition: service_started
 
   etcd:
     image: bitnami/etcd:3.5
@@ -54,7 +56,8 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - nats
+      nats:
+        condition: service_healthy
     networks:
       - faas-network
 

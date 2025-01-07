@@ -16,38 +16,23 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewDecoder(r.Body).Decode(&user)
 	if err != nil {
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":  "error",
-			"message": err.Error(),
-		})
-		w.WriteHeader(http.StatusBadRequest)
+		setResponse(w, http.StatusBadRequest, "error", err.Error())
 		return
 	}
 
 	storedUser, err := repository.GetUserRepository().GetByUsername(user.Username)
 	if err != nil {
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":  "error",
-			"message": "Invalid credentials",
-		})
-		w.WriteHeader(http.StatusUnauthorized)
+		setResponse(w, http.StatusUnauthorized, "error", "Invalid credentials")
 		return
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(storedUser.Password), []byte(user.Password))
 	if err != nil {
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":  "error",
-			"message": "Invalid credentials",
-		})
-		w.WriteHeader(http.StatusUnauthorized)
+		setResponse(w, http.StatusUnauthorized, "error", "Invalid credentials")
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{
-		"status": "success",
-		"token":  "tokenString",
-	})
+	setResponse(w, http.StatusOK, "success", "User logged in successfully")
 }
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
