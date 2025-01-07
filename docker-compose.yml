@@ -1,0 +1,58 @@
+services:
+
+  nats: 
+    image: nats:2.10.24-alpine3.21
+    command: "-js"
+    ports:
+      - "4222:4222"
+    networks:
+      - faas-network
+  apisix: 
+    image: apache/apisix:latest
+    ports:
+      - "9080:9080"
+    volumes: 
+      - ./apisix/:/usr/local/apisix/conf:rw
+    networks:
+      - faas-network
+    environment:
+      - ETCD_HOST=etcd
+      - ETCD_PORT=2379
+    depends_on:
+      etcd:
+        condition: service_healthy
+
+  etcd:
+    image: bitnami/etcd:3.5
+    ports:
+      - "2379:2379"
+    volumes:
+      - ./etcd:/bitnami/etcd
+    networks:
+      - faas-network
+    environment:
+      - ALLOW_NONE_AUTHENTICATION=yes
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd:2379
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  api-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - nats
+    networks:
+      - faas-network
+
+
+
+networks:
+  faas-network:
+    driver: bridge
