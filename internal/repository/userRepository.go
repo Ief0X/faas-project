@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"faas-project/internal/message"
 	"faas-project/internal/models"
 
 	"github.com/nats-io/nats.go"
@@ -10,20 +11,45 @@ type UserRepository interface {
 	CreateUser(user models.User) error
 	GetByUsername(username string) (models.User, error)
 }
-type NatsUserRepository struct {
-	js nats.JetStream
+type NATSUserRepository struct {
+	js nats.JetStreamContext
 }
 
-
-func (n *NatsUserRepository) CreateUser(user models.User) error {
-
+func NewNATSUserRepository(js nats.JetStreamContext) *NATSUserRepository {
+	return &NATSUserRepository{js: js}
 }
 
 // GetByUsername implements UserRepository.
-func (n *NatsUserRepository) GetByUsername(username string) (models.User, error) {
-	panic("unimplemented")
+func (r *NATSUserRepository) CreateUser(user models.User) error {
+	kv, err := r.js.KeyValue("users")
+	if err != nil {
+		return err
+	}
+	_, err = kv.Put(user.Username, []byte(user.Password))
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func GetUserRepository(js *nats.JetStream) UserRepository {
-	return &NatsUserRepository{*js}
+func (r *NATSUserRepository) GetByUsername(username string) (models.User, error) {
+	kv, err := r.js.KeyValue("users")
+	if err != nil {
+		return models.User{}, err
+	}
+	entry, err := kv.Get(username)
+	if err != nil {
+		return models.User{}, err
+	}
+	var user models.User
+	user.Username = username
+	user.Password = string(entry.Value())
+
+	return user, nil
+
+}
+
+func GetUserRepository() *NATSUserRepository {
+	js := message.GetJetStream()
+	return NewNATSUserRepository(js)
 }

@@ -3,7 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"faas-project/internal/models"
-	"fmt"
+	"faas-project/internal/repository"
 	"net/http"
 
 	//"github.com/golang-jwt/jwt/v5"
@@ -11,25 +11,80 @@ import (
 )
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Login")
+	var user models.User
+	w.Header().Set("Content-Type", "application/json")
+
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":  "error",
+			"message": err.Error(),
+		})
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	storedUser, err := repository.GetUserRepository().GetByUsername(user.Username)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":  "error",
+			"message": "Invalid credentials",
+		})
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(storedUser.Password), []byte(user.Password))
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":  "error",
+			"message": "Invalid credentials",
+		})
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "success",
+		"token":  "tokenString",
+	})
 }
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	var user models.User
+	w.Header().Set("Content-Type", "application/json")
 
 	err := json.NewDecoder(r.Body).Decode(&user)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		setResponse(w, http.StatusBadRequest, "error", err.Error())
+		return
+	}
+
+	user, _ = repository.GetUserRepository().GetByUsername(user.Username)
+	if user.Password != "" {
+		setResponse(w, http.StatusConflict, "error", "User already exists")
 		return
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		setResponse(w, http.StatusInternalServerError, "error", "Error processing registration")
 		return
 	}
 	user.Password = string(hashedPassword)
-	fmt.Println(user)
-	w.WriteHeader(http.StatusCreated)
+	err = repository.GetUserRepository().CreateUser(user)
+	if err != nil {
+		setResponse(w, http.StatusInternalServerError, "error", "Error creating user")
+		return
+	}
 
+	setResponse(w, http.StatusCreated, "success", "User registered successfully")
+}
+
+func setResponse(w http.ResponseWriter, status int, statusMessage string, content string) {
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  statusMessage,
+		"message": content,
+	})
 }

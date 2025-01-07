@@ -7,7 +7,6 @@ import (
 var js nats.JetStreamContext
 
 func Connect(url string) (*nats.Conn, error) {
-
 	return nats.Connect(url)
 }
 
@@ -27,7 +26,10 @@ func InitNats(nc *nats.Conn) error {
 		if err != nil {
 			return err
 		}
-
 	}
 	return nil
+}
+
+func GetJetStream() nats.JetStreamContext {
+	return js
 }

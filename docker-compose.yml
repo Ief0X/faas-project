@@ -7,6 +7,13 @@ services:
       - "4222:4222"
     networks:
       - faas-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "4222"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
   apisix: 
     image: apache/apisix:latest
     ports:
