@@ -1,4 +1,4 @@
-FROM golang:1.24rc1-alpine3.21 AS build
+FROM golang:1.21
 
 WORKDIR /app
 
@@ -8,12 +8,12 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o api-server ./cmd/api
+# Instalar Docker CLI
+RUN apt-get update && \
+    apt-get install -y docker.io
 
+RUN go build -o main cmd/api/main.go
 
-FROM alpine:latest
+EXPOSE 8080
 
-WORKDIR /app
-COPY --from=build /app/api-server .
-
-CMD ["./api-server"]
+CMD ["./main"]

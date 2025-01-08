@@ -92,9 +92,14 @@ func ExecuteFunctionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	println("Ejecutando función:", function.Name)
+	println("Imagen:", function.Image)
+	println("Parámetro:", input.Param)
+
 	result, err := repository.GetFunctionRepository().ExecuteFunction(function, input.Param)
 	if err != nil {
-		setResponse(w, http.StatusInternalServerError, "error", "Error al ejecutar la función")
+		println("Error al ejecutar:", err.Error())
+		setResponse(w, http.StatusInternalServerError, "error", "Error al ejecutar la función: "+err.Error())
 		return
 	}
 

@@ -73,15 +73,24 @@ func (r *NATSFunctionRepository) ExecuteFunction(function models.Function, param
 	containerName := "function-" + function.Name
 
 	// Eliminar contenedor si existe
-	exec.Command("docker", "rm", "-f", containerName).Run()
+	rmCmd := exec.Command("docker", "rm", "-f", containerName)
+	rmOutput, rmErr := rmCmd.CombinedOutput()
+	if rmErr != nil {
+		println("Error al eliminar contenedor:", string(rmOutput))
+	}
 
 	// Ejecutar contenedor
-	cmd := exec.Command("docker", "run", "--name", containerName, 
+	cmd := exec.Command("docker", "run", "--name", containerName,
 		"-e", "PARAM="+param,
-		"--rm", function.Image)
+		"--rm", function.Image,
+		"sh", "-c", "echo $PARAM")
+
+	println("Ejecutando comando:", cmd.String()) // Mostrar el comando completo
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		println("Error de Docker:", err.Error())
+		println("Salida de Docker:", string(output))
 		return "", err
 	}
 
