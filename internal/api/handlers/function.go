@@ -47,7 +47,7 @@ func DeleteFunctionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	function, err := repository.GetFunctionRepository().GetByName(functionName)
+	_, err := repository.GetFunctionRepository().GetByName(functionName)
 	if err != nil {
 		setResponse(w, http.StatusNotFound, "error", "Función no encontrada")
 		return
