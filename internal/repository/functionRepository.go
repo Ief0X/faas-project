@@ -1,12 +1,16 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"faas-project/internal/message"
 	"faas-project/internal/models"
-	"os/exec"
+	"io"
 	"strings"
 
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
 	"github.com/nats-io/nats.go"
 )
 
@@ -18,11 +22,19 @@ type FunctionRepository interface {
 }
 
 type NATSFunctionRepository struct {
-	js nats.JetStreamContext
+	js     nats.JetStreamContext
+	docker *client.Client
 }
 
 func NewNATSFunctionRepository(js nats.JetStreamContext) *NATSFunctionRepository {
-	return &NATSFunctionRepository{js: js}
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		panic(err)
+	}
+	return &NATSFunctionRepository{
+		js:     js,
+		docker: cli,
+	}
 }
 
 func (r *NATSFunctionRepository) CreateFunction(function models.Function) error {
@@ -70,31 +82,50 @@ func (r *NATSFunctionRepository) DeleteFunction(name string) error {
 }
 
 func (r *NATSFunctionRepository) ExecuteFunction(function models.Function, param string) (string, error) {
+	ctx := context.Background()
 	containerName := "function-" + function.Name
 
-	// Eliminar contenedor si existe
-	rmCmd := exec.Command("docker", "rm", "-f", containerName)
-	rmOutput, rmErr := rmCmd.CombinedOutput()
-	if rmErr != nil {
-		println("Error al eliminar contenedor:", string(rmOutput))
+	r.docker.ContainerRemove(ctx, containerName, types.ContainerRemoveOptions{
+		Force: true,
+	})
+
+	config := &container.Config{
+		Image: function.Image,
+		Cmd:   []string{"sh", "-c", "echo $PARAM"},
+		Env:   []string{"PARAM=" + param},
 	}
 
-	// Ejecutar contenedor
-	cmd := exec.Command("docker", "run", "--name", containerName,
-		"-e", "PARAM="+param,
-		"--rm", function.Image,
-		"sh", "-c", "echo $PARAM")
-
-	println("Ejecutando comando:", cmd.String()) // Mostrar el comando completo
-
-	output, err := cmd.CombinedOutput()
+	resp, err := r.docker.ContainerCreate(ctx, config, nil, nil, nil, containerName)
 	if err != nil {
-		println("Error de Docker:", err.Error())
-		println("Salida de Docker:", string(output))
 		return "", err
 	}
 
-	return strings.TrimSpace(string(output)), nil
+	if err := r.docker.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
+		return "", err
+	}
+
+	statusCh, errCh := r.docker.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return "", err
+		}
+	case <-statusCh:
+	}
+
+	out, err := r.docker.ContainerLogs(ctx, resp.ID, types.ContainerLogsOptions{ShowStdout: true})
+	if err != nil {
+		return "", err
+	}
+	defer out.Close()
+
+	logs, err := io.ReadAll(out)
+	if err != nil {
+		return "", err
+	}
+
+	output := strings.TrimSpace(string(logs[8:]))
+	return output, nil
 }
 
 func GetFunctionRepository() *NATSFunctionRepository {
