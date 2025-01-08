@@ -35,6 +35,12 @@ func RegisterFunctionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = repository.GetFunctionRepository().AddFunctionToUser(function.OwnerId, function)
+	if err != nil {
+		setResponse(w, http.StatusInternalServerError, "error", "Error al asociar la función al usuario")
+		return
+	}
+
 	setResponse(w, http.StatusCreated, "success", "Función registrada exitosamente")
 }
 
@@ -106,4 +112,21 @@ func ExecuteFunctionHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"result": result,
 	})
+}
+
+func GetFunctionsByUserHandler(w http.ResponseWriter, r *http.Request) {
+	username := r.URL.Query().Get("username")
+	if username == "" {
+		setResponse(w, http.StatusBadRequest, "error", "Nombre de usuario requerido")
+		return
+	}
+
+	functions, err := repository.GetFunctionRepository().GetFunctionsByUser(username)
+	if err != nil {
+		setResponse(w, http.StatusInternalServerError, "error", "Error al obtener funciones del usuario")
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(functions)
 }

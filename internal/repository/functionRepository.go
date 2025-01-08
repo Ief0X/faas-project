@@ -3,12 +3,12 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"faas-project/internal/message"
 	"faas-project/internal/models"
 	"io"
 	"strings"
 	"sync"
-	"errors"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -21,14 +21,16 @@ type FunctionRepository interface {
 	GetByName(name string) (models.Function, error)
 	DeleteFunction(name string) error
 	ExecuteFunction(function models.Function, param string) (string, error)
+	AddFunctionToUser(username string, function models.Function) error
+	GetFunctionsByUser(username string) ([]models.Function, error)
 }
 
 type NATSFunctionRepository struct {
-	js     nats.JetStreamContext
-	docker *client.Client
+	js               nats.JetStreamContext
+	docker           *client.Client
 	activeExecutions sync.Map
-	maxConcurrent   int
-	mu              sync.Mutex
+	maxConcurrent    int
+	mu               sync.Mutex
 }
 
 func NewNATSFunctionRepository(js nats.JetStreamContext) *NATSFunctionRepository {
@@ -37,8 +39,8 @@ func NewNATSFunctionRepository(js nats.JetStreamContext) *NATSFunctionRepository
 		panic(err)
 	}
 	return &NATSFunctionRepository{
-		js:     js,
-		docker: cli,
+		js:            js,
+		docker:        cli,
 		maxConcurrent: 5,
 	}
 }
@@ -84,7 +86,59 @@ func (r *NATSFunctionRepository) DeleteFunction(name string) error {
 		return err
 	}
 
-	return kv.Delete(name)
+	entry, err := kv.Get(name)
+	if err != nil {
+		return err
+	}
+
+	var function models.Function
+	err = json.Unmarshal(entry.Value(), &function)
+	if err != nil {
+		return err
+	}
+
+	err = kv.Delete(name)
+	if err != nil {
+		return err
+	}
+
+	kvUserFunctions, err := r.js.KeyValue("user_functions")
+	if err != nil {
+		return err
+	}
+
+	userFunctionsEntry, err := kvUserFunctions.Get(function.OwnerId)
+	if err != nil {
+		if err == nats.ErrKeyNotFound {
+			return nil
+		}
+		return err
+	}
+
+	var functions []models.Function
+	err = json.Unmarshal(userFunctionsEntry.Value(), &functions)
+	if err != nil {
+		return err
+	}
+
+	updatedFunctions := []models.Function{}
+	for _, fn := range functions {
+		if fn.Name != name {
+			updatedFunctions = append(updatedFunctions, fn)
+		}
+	}
+
+	data, err := json.Marshal(updatedFunctions)
+	if err != nil {
+		return err
+	}
+
+	_, err = kvUserFunctions.Put(function.OwnerId, data)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *NATSFunctionRepository) ExecuteFunction(function models.Function, param string) (string, error) {
@@ -92,7 +146,7 @@ func (r *NATSFunctionRepository) ExecuteFunction(function models.Function, param
 		return "", errors.New("maximum concurrent executions reached")
 	}
 	defer r.removeExecution(function.Name)
-	
+
 	ctx := context.Background()
 	containerName := "function-" + function.Name
 
@@ -101,9 +155,9 @@ func (r *NATSFunctionRepository) ExecuteFunction(function models.Function, param
 	})
 
 	config := &container.Config{
-		Image: function.Image,
-		Env:   []string{"PARAM=" + param},
-		Tty:   false,
+		Image:        function.Image,
+		Env:          []string{"PARAM=" + param},
+		Tty:          false,
 		AttachStdout: true,
 		AttachStderr: true,
 	}
@@ -151,19 +205,19 @@ func (r *NATSFunctionRepository) ExecuteFunction(function models.Function, param
 
 	output := string(logs)
 	output = strings.TrimSpace(output)
-	
+
 	var cleanLines []string
 	for _, line := range strings.Split(output, "\n") {
 		if len(line) > 8 {
 			cleanLine := line[8:]
-			if !strings.Contains(cleanLine, "Procesando parámetro") && 
-			   !strings.Contains(cleanLine, "JSON parseado") && 
-			   !strings.Contains(cleanLine, "No es JSON") {
+			if !strings.Contains(cleanLine, "Procesando parámetro") &&
+				!strings.Contains(cleanLine, "JSON parseado") &&
+				!strings.Contains(cleanLine, "No es JSON") {
 				cleanLines = append(cleanLines, cleanLine)
 			}
 		}
 	}
-	
+
 	return strings.Join(cleanLines, "\n"), nil
 }
 
@@ -192,4 +246,55 @@ func (r *NATSFunctionRepository) removeExecution(functionName string) {
 func GetFunctionRepository() *NATSFunctionRepository {
 	js := message.GetJetStream()
 	return NewNATSFunctionRepository(js)
-} 
+}
+
+func (r *NATSFunctionRepository) AddFunctionToUser(username string, function models.Function) error {
+	kv, err := r.js.KeyValue("user_functions")
+	if err != nil {
+		return err
+	}
+
+	entry, err := kv.Get(username)
+	var functions []models.Function
+	if err == nil {
+		err = json.Unmarshal(entry.Value(), &functions)
+		if err != nil {
+			return err
+		}
+	} else if err != nats.ErrKeyNotFound {
+		return err
+	}
+
+	functions = append(functions, function)
+
+	data, err := json.Marshal(functions)
+	if err != nil {
+		return err
+	}
+
+	_, err = kv.Put(username, data)
+	return err
+}
+
+func (r *NATSFunctionRepository) GetFunctionsByUser(username string) ([]models.Function, error) {
+	kv, err := r.js.KeyValue("user_functions")
+	if err != nil {
+		return nil, err
+	}
+
+	entry, err := kv.Get(username)
+	if err != nil {
+		if err == nats.ErrKeyNotFound {
+			return []models.Function{}, nil
+		}
+		return nil, err
+	}
+
+	var functions []models.Function
+	err = json.Unmarshal(entry.Value(), &functions)
+	if err != nil {
+		return nil, err
+	}
+
+	return functions, nil
+}
