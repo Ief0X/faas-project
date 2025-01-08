@@ -6,8 +6,14 @@ curl -X POST http://localhost:9080/register -H "Content-Type: application/json" 
 
 curl -X POST http://localhost:9080/login -H "Content-Type: application/json" -d "{\"username\":\"testuser\",\"password\":\"testpass\"}"
 
-curl -X POST http://localhost:9080/function -H "Content-Type: application/json" -d "{\"name\":\"test\",\"image\":\"alpine\"}"
+cd TESTING
 
-curl -X POST http://localhost:9080/function/test -H "Content-Type: application/json" -d "{\"param\":\"hola\"}"
+docker build -t emociones .
 
-curl -X DELETE http://localhost:9080/function/test
+curl -X POST -H "Content-Type: application/json" -d "{\"name\": \"emociones\", \"image\": \"emociones\"}" http://localhost:8080/function
+
+curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"happy\"}" http://localhost:8080/function/emociones
+
+curl -X DELETE http://localhost:8080/function/emociones
+
+

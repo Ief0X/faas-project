@@ -92,16 +92,18 @@ func ExecuteFunctionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	println("Ejecutando función:", function.Name)
-	println("Imagen:", function.Image)
-	println("Parámetro:", input.Param)
-
 	result, err := repository.GetFunctionRepository().ExecuteFunction(function, input.Param)
 	if err != nil {
-		println("Error al ejecutar:", err.Error())
+		if err.Error() == "maximum concurrent executions reached" {
+			setResponse(w, http.StatusServiceUnavailable, "error", "Máximo de ejecuciones concurrentes alcanzado")
+			return
+		}
 		setResponse(w, http.StatusInternalServerError, "error", "Error al ejecutar la función: "+err.Error())
 		return
 	}
 
-	setResponse(w, http.StatusOK, "success", result)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"result": result,
+	})
 }
