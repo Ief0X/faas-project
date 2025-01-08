@@ -45,8 +45,9 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, _ = repository.GetUserRepository().GetByUsername(user.Username)
-	if user.Password != "" {
+	// Verificar si el usuario existe
+	existingUser, err := repository.GetUserRepository().GetByUsername(user.Username)
+	if err == nil && existingUser.Password != "" {
 		setResponse(w, http.StatusConflict, "error", "User already exists")
 		return
 	}

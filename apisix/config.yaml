@@ -26,20 +26,3 @@ deployment:
       - "http://etcd:2379"
     prefix: "/apisix"
     timeout: 30
-
-routes:
-  - 
-    id: 1
-    uri: /register
-    upstream:
-      type: roundrobin
-      nodes:
-        "api-server:8080": 1
-        
-  - 
-    id: 2
-    uri: /login
-    upstream:
-      type: roundrobin
-      nodes:
-        "api-server:8080": 1
