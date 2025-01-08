@@ -27,6 +27,16 @@ func InitNats(nc *nats.Conn) error {
 			return err
 		}
 	}
+
+	_, err = js.KeyValue("functions")
+	if err == nats.ErrBucketNotFound {
+		_, err = js.CreateKeyValue(&nats.KeyValueConfig{
+			Bucket: "functions",
+		})
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
