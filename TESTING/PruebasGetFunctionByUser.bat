@@ -26,6 +26,11 @@ curl -X POST -H "Content-Type: application/json" -d "{\"id\": \"2\", \"name\": \
 echo _________________________________________________________________________
 
 echo _________________________________________________________________________
+echo Registrando tercera funcion para testuser...
+curl -X POST -H "Content-Type: application/json" -d "{\"id\": \"3\", \"name\": \"testfunction3\", \"ownerId\": \"testuser\", \"image\": \"functionbyuser\"}" http://localhost:8080/function
+echo _________________________________________________________________________
+
+echo _________________________________________________________________________
 echo Obteniendo todas las funciones asociadas a testuser antes de eliminar...
 curl -X GET "http://localhost:8080/functions?username=testuser"
 echo _________________________________________________________________________

@@ -12,6 +12,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    volumes:
+      - nats-js-data:/data
 
   apisix: 
     image: apache/apisix:3.11.0-redhat
@@ -63,7 +65,8 @@ services:
     networks:
       - faas-network
 
-
+volumes:
+    nats-js-data:
 
 networks:
   faas-network:
