@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"faas-project/internal/middleware"
 	"faas-project/internal/models"
 	"faas-project/internal/repository"
 	"net/http"
+	"time"
 
-	//"github.com/golang-jwt/jwt/v5"
+	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -31,6 +33,21 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		setResponse(w, http.StatusUnauthorized, "error", "Invalid credentials")
 		return
 	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": storedUser.Username,
+		"exp": time.Now().Add(24 * time.Hour).Unix(),
+	})
+	tokenString, err := token.SignedString(middleware.JwtSecret)
+	if err != nil {
+		setResponse(w, http.StatusInternalServerError, "error", "Could not generate token")
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "success",
+		"token":  tokenString,
+	})
 
 	setResponse(w, http.StatusOK, "success", "User logged in successfully")
 }

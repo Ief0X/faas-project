@@ -3,6 +3,7 @@ package main
 import (
 	"faas-project/internal/api/handlers"
 	"faas-project/internal/message"
+	"faas-project/internal/middleware"
 	"fmt"
 	"net/http"
 )
@@ -19,8 +20,8 @@ func main() {
 	http.HandleFunc("/", handlers.DefaultHandler)
 	http.HandleFunc("/login", handlers.LoginHandler)
 	http.HandleFunc("/register", handlers.RegisterHandler)
-	http.HandleFunc("/function", handlers.RegisterFunctionHandler)
-	http.HandleFunc("/function/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/function", middleware.JWTMiddleware(handlers.RegisterFunctionHandler))
+	http.HandleFunc("/function/", middleware.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodDelete:
 			handlers.DeleteFunctionHandler(w, r)
@@ -29,8 +30,8 @@ func main() {
 		default:
 			http.NotFound(w, r)
 		}
-	})
-	http.HandleFunc("/functions", handlers.GetFunctionsByUserHandler)
+	}))
+	http.HandleFunc("/functions", middleware.JWTMiddleware(handlers.GetFunctionsByUserHandler))
 
 	fmt.Println("Starting server at port 8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
