@@ -45,11 +45,10 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{
-		"status": "success",
-		"token":  tokenString,
+		"status":  "success",
+		"message": "User logged in successfully",
+		"token":   tokenString,
 	})
-
-	setResponse(w, http.StatusOK, "success", "User logged in successfully")
 }
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
