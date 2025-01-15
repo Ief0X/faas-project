@@ -1,4 +1,6 @@
 @echo off
+
+echo Current directory: %CD%
 docker compose up --build -d
 timeout /t 2
 
@@ -32,6 +34,8 @@ if "%TOKEN%"=="" (
 DEL login_response.json
 echo _________________________________________________________________________
 
+cd TESTING
+echo Current directory: %CD%
 docker build -t functionbyuser .
 timeout /t 2
 
@@ -70,4 +74,5 @@ curl -X GET "http://localhost:8080/functions?username=testuser" ^
 echo _________________________________________________________________________
 
 echo Script completed.
+cd ..
 pause
