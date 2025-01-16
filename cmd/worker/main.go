@@ -29,18 +29,29 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	nc.QueueSubscribe(
 		"execution.*", "workers",
 		func(msg *nats.Msg) {
 
 			hostConfig := &container.HostConfig{
-				AutoRemove:  false,
+				AutoRemove:  true,
 				NetworkMode: container.NetworkMode("faas-project_faas-network"),
 			}
 			dockerClient, err := client.NewClientWithOpts(client.FromEnv)
 			if err != nil {
 				log.Printf("Error al crear el cliente de Docker: %v", err)
 				return
+			}
+			time.Sleep(10 * time.Second)
+			images, err := dockerClient.ImageList(context.Background(), types.ImageListOptions{})
+			if err != nil {
+				log.Printf("Error al listar imágenes: %v", err)
+				return
+			}
+
+			for _, image := range images {
+				log.Printf("ID: %s Tags: %v Size: %d", image.ID[:10], image.RepoTags, image.Size)
 			}
 			log.Printf("Mensaje recibido desde NATS ÑÑÑÑÑ: %s", string(msg.Data))
 			var req struct {
@@ -57,9 +68,10 @@ func main() {
 			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 			defer cancel()
 			var randomName = fmt.Sprintf("faas-%d", time.Now().Unix())
+			log.Println(req.Function.Image)
 			resp, err := dockerClient.ContainerCreate(ctx, &container.Config{
 				Image:        req.Function.Image,
-				Cmd:          []string{req.Param},
+				Env:          []string{fmt.Sprintf("PARAM=%s", req.Param)},
 				Tty:          false,
 				AttachStdout: true,
 				AttachStderr: true,
@@ -68,6 +80,8 @@ func main() {
 				log.Printf("Error al crear el contenedor: %v", err)
 				return
 			}
+			log.Printf("Container created with ID: %s", resp.ID)
+			log.Printf("Container created with ID: %s", resp)
 			err = dockerClient.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
 			if err != nil {
 				log.Printf("Error al iniciar el contenedor: %v", err)

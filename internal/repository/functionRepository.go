@@ -303,7 +303,7 @@ func (r *NATSFunctionRepository) executeInWorker(function models.Function, param
 	}
 
 	hostConfig := &container.HostConfig{
-		AutoRemove:  false,
+		AutoRemove:  true,
 		NetworkMode: container.NetworkMode("faas-project_faas-network"),
 	}
 
