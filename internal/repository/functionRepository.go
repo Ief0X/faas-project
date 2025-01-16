@@ -221,7 +221,6 @@ func (r *NATSFunctionRepository) executeInWorker(function models.Function, param
 	}
 	defer r.removeExecution(function.Name)
 
-	log.Printf("Verificando si la función %s existe", function.Name)
 	originalFunction, err := r.GetByName(function.Name)
 	if err != nil {
 		log.Printf("Función %s no encontrada: %v", function.Name, err)
@@ -308,7 +307,6 @@ func (r *NATSFunctionRepository) executeInWorker(function models.Function, param
 
 	resp, err := r.docker.ContainerCreate(ctx, config, hostConfig, nil, nil, containerName)
 	if err != nil {
-		log.Printf("Error al crear el contenedor: %v", err)
 		return "", fmt.Errorf("error al crear el contenedor: %v", err)
 	}
 
@@ -393,7 +391,6 @@ func (r *NATSFunctionRepository) executeInWorker(function models.Function, param
 		execError = fmt.Errorf("timeout al esperar la ejecución del contenedor")
 	}
 
-	log.Printf("Limpiando el contenedor %s", resp.ID)
 	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cleanupCancel()
 	err = r.docker.ContainerRemove(cleanupCtx, resp.ID, types.ContainerRemoveOptions{

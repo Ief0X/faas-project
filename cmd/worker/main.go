@@ -31,8 +31,6 @@ func NewWorker(id int, repo repository.FunctionRepository) *Worker {
 func (w *Worker) Start(ctx context.Context, jobs <-chan repository.PendingFunction, wg *sync.WaitGroup) {
     defer wg.Done()
     
-    log.Printf("Trabajador %d iniciado y esperando trabajos", w.id)
-    
     for {
         select {
         case <-ctx.Done():
@@ -52,7 +50,7 @@ func (w *Worker) Start(ctx context.Context, jobs <-chan repository.PendingFuncti
 
 func (w *Worker) processFunction(pendingFunction repository.PendingFunction) {
     function := pendingFunction.Function
-    log.Printf("Trabajador %d iniciando procesamiento de función: %s (Imagen: %s)\n", w.id, function.Name, function.Image)
+    //log.Printf("Trabajador %d iniciando procesamiento de función: %s (Imagen: %s)\n", w.id, function.Name, function.Image)
     
     result, err := w.executeFunction(function, pendingFunction.Param)
     if err != nil {
@@ -60,13 +58,9 @@ func (w *Worker) processFunction(pendingFunction repository.PendingFunction) {
         return
     }
     
-    log.Printf("Trabajador %d ejecutó correctamente la función %s\n", w.id, function.Name)
-    
     function.LastExecution = time.Now()
     function.LastResult = result
-    if err := w.repository.Update(function); err != nil {
-        log.Printf("Trabajador %d error actualizando estado de función %s: %v\n", w.id, function.Name, err)
-    } else {
+    if err := w.repository.Update(function); err == nil {
         log.Printf("Trabajador %d actualizó correctamente el estado de la función %s\n", w.id, function.Name)
     }
 }
@@ -84,7 +78,6 @@ func main() {
     
     var repo repository.FunctionRepository
     for i := 0; i < 30; i++ {
-        log.Printf("Intento %d para conectar con NATS", i+1)
         repo = repository.GetFunctionRepository()
         if repo != nil {
             log.Printf("Conectado correctamente a NATS en el intento %d", i+1)
@@ -106,13 +99,11 @@ func main() {
     defer cancel()
     
     var wg sync.WaitGroup
-    log.Printf("Iniciando %d trabajadores...", numWorkers)
     for i := 1; i <= numWorkers; i++ {
         worker := NewWorker(i, repo)
         wg.Add(1)
         go worker.Start(ctx, jobs, &wg)
     }
-    log.Printf("Todos los trabajadores iniciados correctamente")
     
     if natsRepo, ok := repo.(*repository.NATSFunctionRepository); ok {
         js := natsRepo.GetJS()
@@ -126,6 +117,7 @@ func main() {
                 return
             }
             
+            log.Printf("----------------------------------param: %s", req.Param)
             result, err := repo.ExecuteFunction(req.Function, req.Param)
             if err != nil {
                 result = fmt.Sprintf("error: %v", err)
@@ -145,16 +137,11 @@ func main() {
     log.Printf("Iniciando despachador de trabajos")
     go func() {
         for {
-            log.Printf("Revisando ejecuciones pendientes...")
             pendingFunctions, err := repo.GetPendingExecutions()
             if err != nil {
                 log.Printf("Error al obtener ejecuciones pendientes: %v\n", err)
                 time.Sleep(5 * time.Second)
                 continue
-            }
-            
-            if len(pendingFunctions) > 0 {
-                log.Printf("Encontrados %d funciones pendientes para ejecutar", len(pendingFunctions))
             }
             
             for _, pendingFunction := range pendingFunctions {
