@@ -58,7 +58,6 @@ func main() {
 			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 			defer cancel()
 			var randomName = fmt.Sprintf("faas-%d", time.Now().Unix())
-			log.Println(req.Function.Image)
 			resp, err := dockerClient.ContainerCreate(ctx, &container.Config{
 				Image:        req.Function.Image,
 				Env:          []string{fmt.Sprintf("PARAM=%s", req.Param)},

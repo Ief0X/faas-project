@@ -42,9 +42,17 @@ start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \
 start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"test5ddrg\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
 timeout /t 8
 
+echo Ejecutando diferentes funciones simultáneamente...
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"test1\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"testdfhbfgbn2\"}" http://localhost:9080/function/testfunction2 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"testdfggdr3\"}" http://localhost:9080/function/testfunction3 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"tesdrgdrt4\"}" http://localhost:9080/function/testfunction4 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"test5ddrg\"}" http://localhost:9080/function/testfunction5 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"test6ddrg\"}" http://localhost:9080/function/testfunction6 -H "Authorization: Bearer %TOKEN%""
+timeout /t 8
 
 echo Limpieza...
-for /l %%i in (1,1,3) do (
+for /l %%i in (1,1,6) do (
     curl -X DELETE http://localhost:9080/function/testfunction%%i ^
          -H "Authorization: Bearer %TOKEN%"
     timeout /t 1

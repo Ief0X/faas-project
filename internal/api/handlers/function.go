@@ -87,30 +87,24 @@ func ExecuteFunctionHandler(w http.ResponseWriter, r *http.Request) {
 		setResponse(w, http.StatusNotFound, "error", "Función no encontrada")
 		return
 	}
-
-	var input struct {
+	var param struct {
 		Param string `json:"param"`
 	}
-
-	err = json.NewDecoder(r.Body).Decode(&input)
+	err = json.NewDecoder(r.Body).Decode(&param)
 	if err != nil {
-		setResponse(w, http.StatusBadRequest, "error", "Parámetro inválido")
+		setResponse(w, http.StatusBadRequest, "error", "Error al decodificar el parámetro")
 		return
 	}
-
-	result, err := repository.GetFunctionRepository().ExecuteFunction(function, input.Param)
+	msg, err := repository.GetFunctionRepository().PublishFunction(function, param.Param)
 	if err != nil {
-		if err.Error() == "maximum concurrent executions reached" {
-			setResponse(w, http.StatusServiceUnavailable, "error", "Máximo de ejecuciones concurrentes alcanzado")
-			return
-		}
-		setResponse(w, http.StatusInternalServerError, "error", "Error al ejecutar la función: "+err.Error())
+		setResponse(w, http.StatusInternalServerError, "error", "Error al publicar la función")
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"result": result,
+		"status": "success",
+		"msg":    msg.Subject,
 	})
 }
 

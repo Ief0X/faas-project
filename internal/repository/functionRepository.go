@@ -24,6 +24,11 @@ type PendingFunction struct {
 	Param    string
 }
 
+type ExecutionRequest struct {
+	Function models.Function `json:"function"`
+	Param    string          `json:"param"`
+}
+
 type FunctionRepository interface {
 	CreateFunction(function models.Function) error
 	GetByName(name string) (models.Function, error)
@@ -43,6 +48,23 @@ type NATSFunctionRepository struct {
 	containerLocks   sync.Map
 	maxConcurrent    int
 	mu               sync.Mutex
+}
+
+func (r *NATSFunctionRepository) PublishFunction(function models.Function, param string) (*nats.Msg, error) {
+	aux := ExecutionRequest{
+		Function: function,
+		Param:    param,
+	}
+	data, err := json.Marshal(aux)
+	if err != nil {
+		return nil, err
+	}
+	msg := &nats.Msg{
+		Subject: fmt.Sprintf("execution.%s", function.Name),
+		Data:    data,
+	}
+	r.js.PublishMsg(msg)
+	return msg, nil
 }
 
 func NewNATSFunctionRepository(js nats.JetStreamContext) *NATSFunctionRepository {
