@@ -163,7 +163,7 @@ func (r *NATSFunctionRepository) ExecuteFunction(function models.Function, param
 
 	type executionRequest struct {
 		Function models.Function `json:"function"`
-		Param    string         `json:"param"`
+		Param    string          `json:"param"`
 	}
 
 	req := executionRequest{
@@ -176,6 +176,8 @@ func (r *NATSFunctionRepository) ExecuteFunction(function models.Function, param
 		return "", fmt.Errorf("error serializando la solicitud: %v", err)
 	}
 
+	log.Printf("WWWWWWWWWWW Publicando solicitud de ejecución para la función %s %s", function.Name, data)
+
 	_, err = r.js.PublishMsg(&nats.Msg{
 		Subject: fmt.Sprintf("execution.%s", function.Name),
 		Data:    data,
@@ -183,7 +185,7 @@ func (r *NATSFunctionRepository) ExecuteFunction(function models.Function, param
 	if err != nil {
 		return "", fmt.Errorf("error publicando la solicitud de ejecución: %v", err)
 	}
-
+	//Esto seguramente sobra
 	sub, err := r.js.PullSubscribe(fmt.Sprintf("execution.%s.response", function.Name), "")
 	if err != nil {
 		return "", fmt.Errorf("error suscribiendo a la respuesta: %v", err)
@@ -230,8 +232,8 @@ func (r *NATSFunctionRepository) executeInWorker(function models.Function, param
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	containerName := fmt.Sprintf("function-%s-%d-%s", 
-		function.Name, 
+	containerName := fmt.Sprintf("function-%s-%d-%s",
+		function.Name,
 		time.Now().UnixNano(),
 		strings.ReplaceAll(param, " ", "_"))
 
@@ -429,9 +431,9 @@ func (r *NATSFunctionRepository) canExecute(functionName string) bool {
 	count := 0
 	r.activeExecutions.Range(func(key, value interface{}) bool {
 		if keyStr, ok := key.(string); ok {
-			if !strings.HasPrefix(keyStr, "container_lock_") && 
-			   !strings.HasPrefix(keyStr, "lock_") && 
-			   !strings.HasPrefix(keyStr, "pending_lock_") {
+			if !strings.HasPrefix(keyStr, "container_lock_") &&
+				!strings.HasPrefix(keyStr, "lock_") &&
+				!strings.HasPrefix(keyStr, "pending_lock_") {
 				if timestamp, ok := value.(time.Time); ok {
 					if time.Since(timestamp) < 30*time.Second {
 						count++
@@ -455,7 +457,7 @@ func (r *NATSFunctionRepository) canExecute(functionName string) bool {
 func (r *NATSFunctionRepository) removeExecution(functionName string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if _, exists := r.activeExecutions.Load(functionName); exists {
 		r.activeExecutions.Delete(functionName)
 	}
@@ -584,7 +586,7 @@ func (r *NATSFunctionRepository) GetPendingExecutions() ([]PendingFunction, erro
 		if _, exists := r.containerLocks.LoadOrStore(lockKey, true); exists {
 			continue
 		}
-		
+
 		go func(k string) {
 			time.Sleep(30 * time.Second)
 			r.containerLocks.Delete(fmt.Sprintf("pending_lock_%s", k))
