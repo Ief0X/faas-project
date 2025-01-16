@@ -28,7 +28,7 @@ func NewWorker(id int, repo repository.FunctionRepository) *Worker {
     }
 }
 
-func (w *Worker) Start(ctx context.Context, jobs <-chan models.Function, wg *sync.WaitGroup) {
+func (w *Worker) Start(ctx context.Context, jobs <-chan repository.PendingFunction, wg *sync.WaitGroup) {
     defer wg.Done()
     
     log.Printf("Trabajador %d iniciado y esperando trabajos", w.id)
@@ -39,36 +39,40 @@ func (w *Worker) Start(ctx context.Context, jobs <-chan models.Function, wg *syn
             log.Printf("Trabajador %d apagado\n", w.id)
             return
             
-        case function, ok := <-jobs:
+        case pendingFunction, ok := <-jobs:
             if !ok {
                 log.Printf("Trabajador %d canal de trabajos cerrado, apagando", w.id)
                 return
             }
             
-            log.Printf("Trabajador %d iniciando procesamiento de función: %s (Imagen: %s)\n", w.id, function.Name, function.Image)
-            
-            result, err := w.executeFunction(function)
-            if err != nil {
-                log.Printf("Trabajador %d error ejecutando función %s: %v\n", w.id, function.Name, err)
-                continue
-            }
-            
-            log.Printf("Trabajador %d ejecutó correctamente la función %s\n", w.id, function.Name)
-            
-            function.LastExecution = time.Now()
-            function.LastResult = result
-            log.Printf("Trabajador %d actualizando estado de función %s\n", w.id, function.Name)
-            if err := w.repository.Update(function); err != nil {
-                log.Printf("Trabajador %d error actualizando estado de función %s: %v\n", w.id, function.Name, err)
-            } else {
-                log.Printf("Trabajador %d actualizó correctamente el estado de la función %s\n", w.id, function.Name)
-            }
+            w.processFunction(pendingFunction)
         }
     }
 }
 
-func (w *Worker) executeFunction(function models.Function) (string, error) {
-    return w.repository.ExecuteFunction(function, "")
+func (w *Worker) processFunction(pendingFunction repository.PendingFunction) {
+    function := pendingFunction.Function
+    log.Printf("Trabajador %d iniciando procesamiento de función: %s (Imagen: %s)\n", w.id, function.Name, function.Image)
+    
+    result, err := w.executeFunction(function, pendingFunction.Param)
+    if err != nil {
+        log.Printf("Trabajador %d error ejecutando función %s: %v\n", w.id, function.Name, err)
+        return
+    }
+    
+    log.Printf("Trabajador %d ejecutó correctamente la función %s\n", w.id, function.Name)
+    
+    function.LastExecution = time.Now()
+    function.LastResult = result
+    if err := w.repository.Update(function); err != nil {
+        log.Printf("Trabajador %d error actualizando estado de función %s: %v\n", w.id, function.Name, err)
+    } else {
+        log.Printf("Trabajador %d actualizó correctamente el estado de la función %s\n", w.id, function.Name)
+    }
+}
+
+func (w *Worker) executeFunction(function models.Function, param string) (string, error) {
+    return w.repository.ExecuteFunction(function, param)
 }
 
 func main() {
@@ -96,7 +100,7 @@ func main() {
     
     log.Printf("Repositorio inicializado correctamente")
     
-    jobs := make(chan models.Function, 100)
+    jobs := make(chan repository.PendingFunction, 100)
     
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
@@ -142,20 +146,20 @@ func main() {
     go func() {
         for {
             log.Printf("Revisando ejecuciones pendientes...")
-            functions, err := repo.GetPendingExecutions()
+            pendingFunctions, err := repo.GetPendingExecutions()
             if err != nil {
                 log.Printf("Error al obtener ejecuciones pendientes: %v\n", err)
                 time.Sleep(5 * time.Second)
                 continue
             }
             
-            if len(functions) > 0 {
-                log.Printf("Encontrados %d funciones pendientes para ejecutar", len(functions))
+            if len(pendingFunctions) > 0 {
+                log.Printf("Encontrados %d funciones pendientes para ejecutar", len(pendingFunctions))
             }
             
-            for _, function := range functions {
-                log.Printf("Despachando función %s a los trabajadores", function.Name)
-                jobs <- function
+            for _, pendingFunction := range pendingFunctions {
+                log.Printf("Despachando función %s a los trabajadores", pendingFunction.Function.Name)
+                jobs <- pendingFunction
             }
             
             time.Sleep(1 * time.Second)

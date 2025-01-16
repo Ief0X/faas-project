@@ -19,6 +19,11 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+type PendingFunction struct {
+	Function models.Function
+	Param    string
+}
+
 type FunctionRepository interface {
 	CreateFunction(function models.Function) error
 	GetByName(name string) (models.Function, error)
@@ -26,7 +31,7 @@ type FunctionRepository interface {
 	ExecuteFunction(function models.Function, param string) (string, error)
 	AddFunctionToUser(username string, function models.Function) error
 	GetFunctionsByUser(username string) ([]models.Function, error)
-	GetPendingExecutions() ([]models.Function, error)
+	GetPendingExecutions() ([]PendingFunction, error)
 	Update(function models.Function) error
 	GetJS() nats.JetStreamContext
 }
@@ -35,6 +40,7 @@ type NATSFunctionRepository struct {
 	js               nats.JetStreamContext
 	docker           *client.Client
 	activeExecutions sync.Map
+	containerLocks   sync.Map
 	maxConcurrent    int
 	mu               sync.Mutex
 }
@@ -207,7 +213,7 @@ func (r *NATSFunctionRepository) ExecuteFunction(function models.Function, param
 }
 
 func (r *NATSFunctionRepository) executeInWorker(function models.Function, param string) (string, error) {
-	log.Printf("Starting execution of function %s with param: %s", function.Name, param)
+	log.Printf("Iniciando ejecución de función %s con parámetro: %s", function.Name, param)
 
 	if !r.canExecute(function.Name) {
 		log.Printf("Se alcanzó el máximo de ejecuciones concurrentes para la función %s", function.Name)
@@ -215,7 +221,7 @@ func (r *NATSFunctionRepository) executeInWorker(function models.Function, param
 	}
 	defer r.removeExecution(function.Name)
 
-	log.Printf("Verifying function %s exists", function.Name)
+	log.Printf("Verificando si la función %s existe", function.Name)
 	originalFunction, err := r.GetByName(function.Name)
 	if err != nil {
 		log.Printf("Función %s no encontrada: %v", function.Name, err)
@@ -225,15 +231,29 @@ func (r *NATSFunctionRepository) executeInWorker(function models.Function, param
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	containerName := "function-" + function.Name
+	containerName := fmt.Sprintf("function-%s-%d-%s", 
+		function.Name, 
+		time.Now().UnixNano(),
+		strings.ReplaceAll(param, " ", "_"))
+
+	containers, err := r.docker.ContainerList(ctx, types.ContainerListOptions{All: true})
+	if err == nil {
+		for _, cont := range containers {
+			if strings.HasPrefix(cont.Names[0], "/function-"+function.Name) {
+				_ = r.docker.ContainerRemove(ctx, cont.ID, types.ContainerRemoveOptions{
+					Force: true,
+				})
+			}
+		}
+	}
 
 	containerLock := fmt.Sprintf("container_lock_%s", containerName)
-	if _, exists := r.activeExecutions.LoadOrStore(containerLock, true); exists {
+	if _, exists := r.containerLocks.LoadOrStore(containerLock, true); exists {
 		return "", fmt.Errorf("el contenedor ya está siendo gestionado")
 	}
-	defer r.activeExecutions.Delete(containerLock)
+	defer r.containerLocks.Delete(containerLock)
 
-	containers, err := r.docker.ContainerList(ctx, types.ContainerListOptions{
+	containers, err = r.docker.ContainerList(ctx, types.ContainerListOptions{
 		All: true,
 	})
 	if err != nil {
@@ -243,8 +263,8 @@ func (r *NATSFunctionRepository) executeInWorker(function models.Function, param
 
 	for _, cont := range containers {
 		for _, name := range cont.Names {
-			if name == "/"+containerName {
-				log.Printf("Eliminando contenedor existente %s", cont.ID)
+			if strings.HasPrefix(name[1:], fmt.Sprintf("function-%s-", function.Name)) {
+				log.Printf("Eliminando contenedor antiguo %s", cont.ID)
 				err := r.docker.ContainerRemove(ctx, cont.ID, types.ContainerRemoveOptions{
 					Force:         true,
 					RemoveVolumes: true,
@@ -253,7 +273,6 @@ func (r *NATSFunctionRepository) executeInWorker(function models.Function, param
 					log.Printf("Error al eliminar contenedor %s: %v", cont.ID, err)
 				}
 				time.Sleep(2 * time.Second)
-				break
 			}
 		}
 	}
@@ -276,7 +295,7 @@ func (r *NATSFunctionRepository) executeInWorker(function models.Function, param
 
 	config := &container.Config{
 		Image:        function.Image,
-		Env:          []string{"PARAM=" + param},
+		Env:          []string{fmt.Sprintf("PARAM=%s", strings.TrimSpace(param))},
 		Tty:          false,
 		AttachStdout: true,
 		AttachStderr: true,
@@ -411,8 +430,20 @@ func (r *NATSFunctionRepository) canExecute(functionName string) bool {
 	defer r.mu.Unlock()
 
 	count := 0
-	r.activeExecutions.Range(func(_, _ interface{}) bool {
-		count++
+	r.activeExecutions.Range(func(key, value interface{}) bool {
+		if keyStr, ok := key.(string); ok {
+			if !strings.HasPrefix(keyStr, "container_lock_") && 
+			   !strings.HasPrefix(keyStr, "lock_") && 
+			   !strings.HasPrefix(keyStr, "pending_lock_") {
+				if timestamp, ok := value.(time.Time); ok {
+					if time.Since(timestamp) < 30*time.Second {
+						count++
+					} else {
+						r.activeExecutions.Delete(keyStr)
+					}
+				}
+			}
+		}
 		return true
 	})
 
@@ -420,12 +451,17 @@ func (r *NATSFunctionRepository) canExecute(functionName string) bool {
 		return false
 	}
 
-	r.activeExecutions.Store(functionName, struct{}{})
+	r.activeExecutions.Store(functionName, time.Now())
 	return true
 }
 
 func (r *NATSFunctionRepository) removeExecution(functionName string) {
-	r.activeExecutions.Delete(functionName)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	
+	if _, exists := r.activeExecutions.Load(functionName); exists {
+		r.activeExecutions.Delete(functionName)
+	}
 }
 
 func GetFunctionRepository() *NATSFunctionRepository {
@@ -529,7 +565,7 @@ func (r *NATSFunctionRepository) GetFunctionsByUser(username string) ([]models.F
 	return functions, nil
 }
 
-func (r *NATSFunctionRepository) GetPendingExecutions() ([]models.Function, error) {
+func (r *NATSFunctionRepository) GetPendingExecutions() ([]PendingFunction, error) {
 	kv, err := r.js.KeyValue("functions")
 	if err != nil {
 		return nil, err
@@ -538,22 +574,23 @@ func (r *NATSFunctionRepository) GetPendingExecutions() ([]models.Function, erro
 	entries, err := kv.Keys()
 	if err != nil {
 		if err == nats.ErrNoKeysFound {
-			return []models.Function{}, nil
+			return []PendingFunction{}, nil
 		}
 		return nil, err
 	}
 
-	var pendingFunctions []models.Function
+	var pendingFunctions []PendingFunction
 	now := time.Now()
 
 	for _, key := range entries {
-		lockKey := fmt.Sprintf("lock_%s", key)
-		if _, exists := r.activeExecutions.LoadOrStore(lockKey, true); exists {
+		lockKey := fmt.Sprintf("pending_lock_%s", key)
+		if _, exists := r.containerLocks.LoadOrStore(lockKey, true); exists {
 			continue
 		}
+		
 		go func(k string) {
-			time.Sleep(2 * time.Minute)
-			r.activeExecutions.Delete(fmt.Sprintf("lock_%s", k))
+			time.Sleep(30 * time.Second)
+			r.containerLocks.Delete(fmt.Sprintf("pending_lock_%s", k))
 		}(key)
 
 		entry, err := kv.Get(key)
@@ -568,7 +605,10 @@ func (r *NATSFunctionRepository) GetPendingExecutions() ([]models.Function, erro
 
 		if function.NextExecution.IsZero() || function.NextExecution.Before(now) {
 			if function.LastExecution.IsZero() || function.LastExecution.Before(function.NextExecution) {
-				pendingFunctions = append(pendingFunctions, function)
+				pendingFunctions = append(pendingFunctions, PendingFunction{
+					Function: function,
+					Param:    fmt.Sprintf("test%d", len(pendingFunctions)+1),
+				})
 			}
 		}
 	}

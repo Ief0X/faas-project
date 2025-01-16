@@ -5,14 +5,14 @@ docker compose up --build -d
 timeout /t 2
 
 echo _________________________________________________________________________
-echo Creating user testuser...
+echo Creando usuario de prueba...
 curl -X POST http://localhost:9080/register ^
      -H "Content-Type: application/json" ^
      -d "{\"username\":\"testuser\",\"password\":\"testpass\"}"
 echo _________________________________________________________________________
 
 echo _________________________________________________________________________
-echo Logging in as testuser and retrieving token...
+echo Iniciando sesión como testuser y recuperando token...
 curl -X POST http://localhost:8080/login ^
      -H "Content-Type: application/json" ^
      -d "{\"username\":\"testuser\",\"password\":\"testpass\"}" > login_response.json
@@ -40,7 +40,7 @@ docker build -t functionbyuser .
 timeout /t 2
 
 echo _________________________________________________________________________
-echo Registering function for testuser...
+echo Registrando función para testuser...
 curl -X POST -H "Content-Type: application/json" ^
      -d "{\"id\": \"1\", \"name\": \"testfunction1\", \"ownerId\": \"testuser\", \"image\": \"functionbyuser\"}" ^
      http://localhost:8080/function ^
@@ -48,13 +48,13 @@ curl -X POST -H "Content-Type: application/json" ^
 echo _________________________________________________________________________
 
 echo _________________________________________________________________________
-echo Getting all functions associated with testuser before deletion...
+echo Obteniendo todas las funciones asociadas con testuser antes de la eliminación...
 curl -X GET "http://localhost:8080/functions?username=testuser" ^
      -H "Authorization: Bearer %TOKEN%"
 echo _________________________________________________________________________
 
 echo _________________________________________________________________________
-echo Executing testfunction1...
+echo Ejecutando testfunction1...
 curl -X POST -H "Content-Type: application/json" ^
      -d "{\"param\": \"input\"}" ^
      http://localhost:8080/function/testfunction1 ^
@@ -62,17 +62,17 @@ curl -X POST -H "Content-Type: application/json" ^
 echo _________________________________________________________________________
 
 echo _________________________________________________________________________
-echo Deleting testfunction1...
+echo Eliminando testfunction1...
 curl -X DELETE http://localhost:8080/function/testfunction1 ^
      -H "Authorization: Bearer %TOKEN%"
 echo _________________________________________________________________________
 
 echo _________________________________________________________________________
-echo Getting all functions associated with testuser after deletion...
+echo Obteniendo todas las funciones asociadas con testuser después de la eliminación...
 curl -X GET "http://localhost:8080/functions?username=testuser" ^
      -H "Authorization: Bearer %TOKEN%"
 echo _________________________________________________________________________
 
-echo Script completed.
+echo Prueba completada.
 cd ..
 pause
