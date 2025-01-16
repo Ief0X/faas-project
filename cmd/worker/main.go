@@ -43,16 +43,6 @@ func main() {
 				log.Printf("Error al crear el cliente de Docker: %v", err)
 				return
 			}
-			time.Sleep(10 * time.Second)
-			images, err := dockerClient.ImageList(context.Background(), types.ImageListOptions{})
-			if err != nil {
-				log.Printf("Error al listar imágenes: %v", err)
-				return
-			}
-
-			for _, image := range images {
-				log.Printf("ID: %s Tags: %v Size: %d", image.ID[:10], image.RepoTags, image.Size)
-			}
 			log.Printf("Mensaje recibido desde NATS ÑÑÑÑÑ: %s", string(msg.Data))
 			var req struct {
 				Function models.Function `json:"function"`
@@ -80,8 +70,6 @@ func main() {
 				log.Printf("Error al crear el contenedor: %v", err)
 				return
 			}
-			log.Printf("Container created with ID: %s", resp.ID)
-			log.Printf("Container created with ID: %s", resp)
 			err = dockerClient.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
 			if err != nil {
 				log.Printf("Error al iniciar el contenedor: %v", err)

@@ -28,4 +28,4 @@ VOLUME /var/run/docker.sock
 
 ENV NATS_URL=nats://nats:4222
 
-ENTRYPOINT ["/worker"]
+ENTRYPOINT ["/worker", "/worker"]

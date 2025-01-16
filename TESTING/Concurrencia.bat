@@ -29,11 +29,10 @@ for /l %%i in (1,1,6) do (
          -d "{\"name\": \"testfunction%%i\", \"ownerId\": \"testuser\", \"image\": \"functionbyuser\"}" ^
          http://localhost:9080/function ^
          -H "Authorization: Bearer %TOKEN%"
-    timeout /t 1
 )
 
 : Se ejecuta en una CMD que se abre rápidamente, no os asusteis.
-timeout /t 5
+timeout /t 2
 : Esto no funciona del todo
 echo Ejecutando misma función simultáneamente...
 start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"test1\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
@@ -41,7 +40,7 @@ start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \
 start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"testdfggdr3\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
 start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"tesdrgdrt4\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
 start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"test5ddrg\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
-timeout /t 10
+timeout /t 8
 
 
 echo Limpieza...
