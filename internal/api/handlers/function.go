@@ -26,9 +26,15 @@ func RegisterFunctionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	existingFunction, err := repository.GetFunctionRepository().GetFunctionsByUser(function.OwnerId)
-	if err == nil && len(existingFunction) > 0 {
-		setResponse(w, http.StatusConflict, "error", "Ya existe una función con ese nombre")
+	if err != nil {
+		setResponse(w, http.StatusInternalServerError, "error", "Error al obtener funciones del usuario")
 		return
+	}
+	for _, f := range existingFunction {
+		if f.Name == function.Name {
+			setResponse(w, http.StatusConflict, "error", "Ya existe una función con ese nombre")
+			return
+		}
 	}
 	authHeader := r.Header.Get("Authorization")
 	userName, err := extractUserFromToken(authHeader)
