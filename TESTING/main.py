@@ -35,8 +35,6 @@ def main():
     
     sentiment = analyze_sentiment(param)
     
-    print(f"Análisis de sentimiento para: '{param}'")
-    
     if sentiment['compound'] >= 0.05:
         print("Sentimiento: Positivo")
     elif sentiment['compound'] <= -0.05:

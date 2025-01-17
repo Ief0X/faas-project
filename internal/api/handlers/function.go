@@ -95,17 +95,8 @@ func ExecuteFunctionHandler(w http.ResponseWriter, r *http.Request) {
 		setResponse(w, http.StatusBadRequest, "error", "Error al decodificar el parámetro")
 		return
 	}
-	msg, err := repository.GetFunctionRepository().PublishFunction(function, param.Param)
-	if err != nil {
-		setResponse(w, http.StatusInternalServerError, "error", "Error al publicar la función")
-		return
-	}
+	repository.GetFunctionRepository().PublishFunction(function, param.Param, w)
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"status": "success",
-		"msg":    msg.Subject,
-	})
 }
 
 func GetFunctionsByUserHandler(w http.ResponseWriter, r *http.Request) {

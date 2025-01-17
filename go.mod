@@ -4,6 +4,7 @@ go 1.21
 
 require (
 	github.com/docker/docker v24.0.7+incompatible
+	github.com/google/uuid v1.6.0
 	github.com/nats-io/nats.go v1.38.0
 	golang.org/x/crypto v0.31.0
 )

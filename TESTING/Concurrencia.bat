@@ -35,20 +35,20 @@ for /l %%i in (1,1,6) do (
 timeout /t 2
 : Esto no funciona del todo
 echo Ejecutando misma función simultáneamente...
-start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"test1\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
-start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"testdfhbfgbn2\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
-start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"testdfggdr3\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
-start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"tesdrgdrt4\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
-start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"test5ddrg\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"aaaaaaa\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"bbbbbbb\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"ccccccc\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"ddddddd\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"eeeeeeeee\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
 timeout /t 8
 
 echo Ejecutando diferentes funciones simultáneamente...
-start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"test1\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
-start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"testdfhbfgbn2\"}" http://localhost:9080/function/testfunction2 -H "Authorization: Bearer %TOKEN%""
-start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"testdfggdr3\"}" http://localhost:9080/function/testfunction3 -H "Authorization: Bearer %TOKEN%""
-start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"tesdrgdrt4\"}" http://localhost:9080/function/testfunction4 -H "Authorization: Bearer %TOKEN%""
-start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"test5ddrg\"}" http://localhost:9080/function/testfunction5 -H "Authorization: Bearer %TOKEN%""
-start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"test6ddrg\"}" http://localhost:9080/function/testfunction6 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"fffffff\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"gggggg\"}" http://localhost:9080/function/testfunction2 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"hhhhhhh\"}" http://localhost:9080/function/testfunction3 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"iiiiiiiii\"}" http://localhost:9080/function/testfunction4 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"jjjjjjjj\"}" http://localhost:9080/function/testfunction5 -H "Authorization: Bearer %TOKEN%""
+start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"kkkkkkkk\"}" http://localhost:9080/function/testfunction6 -H "Authorization: Bearer %TOKEN%""
 timeout /t 8
 
 echo Limpieza...
