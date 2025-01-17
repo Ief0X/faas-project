@@ -71,7 +71,6 @@ services:
       dockerfile: cmd/worker/Dockerfile
     environment:
       - NATS_URL=nats://nats:4222
-      - IS_WORKER=true
     depends_on:
       - nats
     networks:
@@ -86,7 +85,20 @@ services:
       dockerfile: cmd/worker/Dockerfile
     environment:
       - NATS_URL=nats://nats:4222
-      - IS_WORKER=true
+    depends_on:
+      - nats
+    networks:
+      - faas-network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  worker3:
+    build:
+      context: .
+      dockerfile: cmd/worker/Dockerfile
+    environment:
+      - NATS_URL=nats://nats:4222
     depends_on:
       - nats
     networks:

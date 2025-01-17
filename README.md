@@ -8,6 +8,16 @@
 | Jefferson Paul Caiza Jami |
 | Pablo Granell Robles |
 
+
+## IMPORTANTE
+
+Hemos detectado un problema con etcd, que provoca la corrompción y bloqueo del funcionamiento del sistema al corromperse el archivo de registro de logs.
+Este WAL se corrompe cuando se cierra el contenedor de etcd incorrectamente y la solución que hemos encontrado es detener el contenedor de etcd desde Docker Desktop.
+
+Si al ejecutar el docker-compose hubiera un error fatal en los registros de etcd, es necesario revertir los cambios en WAL y DB, por ejemplo, con un git stash.
+
+Lo hemos probado en Windows con WSL2 y funciona correctamente.
+
 ## Guía de Inicio Rápido
 
 ```
@@ -19,23 +29,30 @@ curl -X POST http://localhost:9080/register -H "Content-Type: application/json" 
 ```
 
 ```
-curl -X POST http://localhost:9080/login -H "Content-Type: application/json" -d "{\"username\":\"testuser\",\"password\":\"testpass\"}"
+curl -X POST http://localhost:9080/login -H "Content-Type: application/json" -d "{\"username\":\"Usuario1\",\"password\":\"test1\"}"
 ```
 
-cd TESTING
+Copiar el token de la respuesta y reemplazar <TOKEN> por el token en los siguientes comandos
 
-docker build -t emociones .
+```
+curl -X POST -H "Content-Type: application/json" -d "{\"id\": \"1\", \"name\": \"Funcion1\", \"ownerId\": \"Usuario1\", \"image\": \"pablogranell/emociones\"}" http://localhost:9080/function -H "Authorization: Bearer <TOKEN>"
+```
 
-curl -X POST -H "Content-Type: application/json" -d "{\"name\": \"emociones\", \"image\": \"emociones\"}" http://localhost:8080/function
+```
+curl -X GET "http://localhost:9080/functions?username=Usuario1" -H "Authorization: Bearer <TOKEN>"
+```
 
-curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"happy\"}" http://localhost:8080/function/emociones
+```
+curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"happy\"}" http://localhost:9080/function/Funcion1 -H "Authorization: Bearer <TOKEN>"
+```
 
-curl -X DELETE http://localhost:8080/function/emociones
+```
+curl -X DELETE http://localhost:9080/function/Funcion1 -H "Authorization: Bearer <TOKEN>"
+```
 
-## IMPORTANTE
+```
+curl -X GET http://localhost:9080/functions?username=Usuario1 -H "Authorization: Bearer <TOKEN>"
+```
 
-Para cerrar el contenedor correctamente hay que parar el contenedor desde docker. (Por ejemplo el boton de parar desde docker desktop)
-
-La utilizacion de CTRL+C causa que se corrompa el archivo de registro de logs de etcd.
 
 
