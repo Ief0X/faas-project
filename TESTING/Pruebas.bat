@@ -12,8 +12,15 @@ curl -X POST http://localhost:9080/register ^
 echo _________________________________________________________________________
 
 echo _________________________________________________________________________
+echo Creando usuario 2...
+curl -X POST http://localhost:9080/register ^
+     -H "Content-Type: application/json" ^
+     -d "{\"username\":\"testuser2\",\"password\":\"testpass2\"}"
+echo _________________________________________________________________________
+
+echo _________________________________________________________________________
 echo Iniciando sesión como testuser y recuperando token...
-curl -X POST http://localhost:8080/login ^
+curl -X POST http://localhost:9080/login ^
      -H "Content-Type: application/json" ^
      -d "{\"username\":\"testuser\",\"password\":\"testpass\"}" > login_response.json
 
@@ -41,7 +48,7 @@ timeout /t 2
 
 echo _________________________________________________________________________
 echo Obteniendo todas las funciones asociadas con testuser antes de la eliminación...
-curl -X GET "http://localhost:8080/functions?username=testuser" ^
+curl -X GET "http://localhost:9080/functions?username=testuser" ^
      -H "Authorization: Bearer %TOKEN%"
 echo _________________________________________________________________________
 
@@ -49,33 +56,47 @@ echo _________________________________________________________________________
 echo Registrando función para testuser...
 curl -X POST -H "Content-Type: application/json" ^
      -d "{\"id\": \"1\", \"name\": \"testfunction1\", \"ownerId\": \"testuser\", \"image\": \"functionbyuser\"}" ^
-     http://localhost:8080/function ^
+     http://localhost:9080/function ^
      -H "Authorization: Bearer %TOKEN%"
 echo _________________________________________________________________________
 
 echo _________________________________________________________________________
 echo Obteniendo todas las funciones asociadas con testuser antes de la eliminación...
-curl -X GET "http://localhost:8080/functions?username=testuser" ^
+curl -X GET "http://localhost:9080/functions?username=testuser" ^
+     -H "Authorization: Bearer %TOKEN%"
+echo _________________________________________________________________________
+
+echo _________________________________________________________________________
+echo Obteniendo todas las funciones asociadas con testuser desde testuser2...
+curl -X GET "http://localhost:9080/functions?username=testuser2" ^
      -H "Authorization: Bearer %TOKEN%"
 echo _________________________________________________________________________
 
 echo _________________________________________________________________________
 echo Ejecutando testfunction1...
 curl -X POST -H "Content-Type: application/json" ^
-     -d "{\"param\": \"input\"}" ^
-     http://localhost:8080/function/testfunction1 ^
+     -d "{\"param\": \"happy\"}" ^
+     http://localhost:9080/function/testfunction1 ^
+     -H "Authorization: Bearer %TOKEN%"
+echo _________________________________________________________________________
+
+echo _________________________________________________________________________
+echo Ejecutando testfunction1 desde testuser2...
+curl -X POST -H "Content-Type: application/json" ^
+     -d "{\"param\": \"happy\"}" ^
+     http://localhost:9080/function/testfunction1 ^
      -H "Authorization: Bearer %TOKEN%"
 echo _________________________________________________________________________
 
 echo _________________________________________________________________________
 echo Eliminando testfunction1...
-curl -X DELETE http://localhost:8080/function/testfunction1 ^
+curl -X DELETE http://localhost:9080/function/testfunction1 ^
      -H "Authorization: Bearer %TOKEN%"
 echo _________________________________________________________________________
 
 echo _________________________________________________________________________
 echo Obteniendo todas las funciones asociadas con testuser después de la eliminación...
-curl -X GET "http://localhost:8080/functions?username=testuser" ^
+curl -X GET "http://localhost:9080/functions?username=testuser" ^
      -H "Authorization: Bearer %TOKEN%"
 echo _________________________________________________________________________
 
@@ -83,19 +104,19 @@ echo _________________________________________________________________________
 echo Registrando función para testuser...
 curl -X POST -H "Content-Type: application/json" ^
      -d "{\"id\": \"1\", \"name\": \"testfunction1\", \"ownerId\": \"testuser\", \"image\": \"functionbyuser\"}" ^
-     http://localhost:8080/function ^
+     http://localhost:9080/function ^
      -H "Authorization: Bearer %TOKEN%"
 echo _________________________________________________________________________
 
 echo _________________________________________________________________________
 echo Obteniendo todas las funciones asociadas con testuser después de la eliminación...
-curl -X GET "http://localhost:8080/functions?username=testuser" ^
+curl -X GET "http://localhost:9080/functions?username=testuser" ^
      -H "Authorization: Bearer %TOKEN%"
 echo _________________________________________________________________________
 
 echo _________________________________________________________________________
 echo Eliminando testfunction1...
-curl -X DELETE http://localhost:8080/function/testfunction1 ^
+curl -X DELETE http://localhost:9080/function/testfunction1 ^
      -H "Authorization: Bearer %TOKEN%"
 echo _________________________________________________________________________
 
