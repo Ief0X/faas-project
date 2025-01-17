@@ -238,6 +238,9 @@ func initFunctionRepository() *NatsFunctionRepository {
 		nc.Close()
 		return nil
 	}
+	NatsConnection = nc
+	jsGlobal = js
+	
 	return &NatsFunctionRepository{
 		conn: nc,
 		js:   js,
