@@ -10,11 +10,17 @@
 
 ## Guía de Inicio Rápido
 
-docker compose up --build 
+```
+	docker compose up --build -d
+```
 
-curl -X POST http://localhost:9080/register -H "Content-Type: application/json" -d "{\"username\":\"testuser\",\"password\":\"testpass\"}"
+```
+curl -X POST http://localhost:9080/register -H "Content-Type: application/json" -d "{\"username\":\"Usuario1\",\"password\":\"test1\"}"
+```
 
+```
 curl -X POST http://localhost:9080/login -H "Content-Type: application/json" -d "{\"username\":\"testuser\",\"password\":\"testpass\"}"
+```
 
 cd TESTING
 

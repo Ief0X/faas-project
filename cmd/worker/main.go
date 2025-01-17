@@ -67,7 +67,17 @@ func main() {
 				AutoRemove:  true,
 				NetworkMode: container.NetworkMode("faas-project_faas-network"),
 			}
+			reader, err := dockerClient.ImagePull(ctx, req.Function.Image, types.ImagePullOptions{})
+			if err != nil {
+				log.Printf("No se ha encontrado la imagen en docker.io: %v", err)
+				return
+			}
 
+			_, err = io.Copy(os.Stdout, reader)
+			if err != nil {
+				log.Printf("Error al copiar la salida del pull: %v", err)
+				return
+			}
 			resp, err := dockerClient.ContainerCreate(ctx, &container.Config{
 				Image:        req.Function.Image,
 				Env:          []string{fmt.Sprintf("PARAM=%s", req.Param)},
@@ -92,7 +102,6 @@ func main() {
 
 			logReader, err := dockerClient.ContainerLogs(ctx, resp.ID, logOpts)
 			if err != nil {
-				log.Printf("Error al leer los logs del contenedor: %v", err)
 				return
 			}
 
@@ -101,7 +110,6 @@ func main() {
 				defer close(logCh)
 				_, err := io.Copy(channelWriter{logCh}, logReader)
 				if err != nil {
-					log.Printf("Error al leer los logs del contenedor: %v", err)
 					return
 				}
 			}()

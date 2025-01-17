@@ -63,7 +63,7 @@ services:
     networks:
       - faas-network
     environment:
-      - REQUEST_TTL=10
+      - REQUEST_TTL=30
 
   worker1:
     build:

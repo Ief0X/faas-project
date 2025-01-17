@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -37,9 +38,9 @@ var REQUEST_TTL, _ = strconv.Atoi(os.Getenv("REQUEST_TTL"))
 
 func cleanDockerOutput(output string) string {
 	if len(output) < 8 {
-		return output
+		return strings.TrimSpace(output)
 	}
-	return output[8:]
+	return strings.TrimSpace(output[8:])
 }
 func (*NatsFunctionRepository) PublishFunction(function models.Function, param string, w http.ResponseWriter) {
 
