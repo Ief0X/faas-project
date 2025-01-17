@@ -64,7 +64,7 @@ func DeleteFunctionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	function, err := repository.GetFunctionRepository().GetFunctionByName(functionName)
 	if err != nil {
-		setResponse(w, http.StatusNotFound, "error", "Función no encontrada")
+		setResponse(w, http.StatusNotFound, "error", "Función no encontrada para este usuario")
 		return
 	}
 	authHeader := r.Header.Get("Authorization")
@@ -74,7 +74,7 @@ func DeleteFunctionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if userName != function.OwnerId {
-		setResponse(w, http.StatusForbidden, "error", "No tienes permisos para ejecutar esta función")
+		setResponse(w, http.StatusForbidden, "error", "No tienes permisos para eliminar esta función")
 		return
 	}
 	err = repository.GetFunctionRepository().DeleteFunction(function)
@@ -102,7 +102,7 @@ func ExecuteFunctionHandler(w http.ResponseWriter, r *http.Request) {
 
 	function, err := repository.GetFunctionRepository().GetFunctionByName(functionName)
 	if err != nil {
-		setResponse(w, http.StatusNotFound, "error", "Función no encontrada")
+		setResponse(w, http.StatusNotFound, "error", "Función no encontrada para este usuario")
 		return
 	}
 	authHeader := r.Header.Get("Authorization")
@@ -145,7 +145,7 @@ func GetFunctionsByUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if checkedUser != username {
-		setResponse(w, http.StatusForbidden, "error", "Token incorrecto")
+		setResponse(w, http.StatusForbidden, "error", "No tienes permisos para acceder a estas funciones")
 		return
 	}
 	w.WriteHeader(http.StatusOK)
