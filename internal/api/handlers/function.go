@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"faas-project/internal/models"
 	"faas-project/internal/repository"
+	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/golang-jwt/jwt/v4"
 )
 
 func RegisterFunctionHandler(w http.ResponseWriter, r *http.Request) {
@@ -22,25 +25,32 @@ func RegisterFunctionHandler(w http.ResponseWriter, r *http.Request) {
 		setResponse(w, http.StatusBadRequest, "error", "Nombre e imagen son requeridos")
 		return
 	}
-
-	existingFunction, err := repository.GetFunctionRepository().GetByName(function.Name)
-	if err == nil && existingFunction.ID != "" {
-		setResponse(w, http.StatusConflict, "error", "Ya existe una función con ese nombre")
+	existingFunction, err := repository.GetFunctionRepository().GetFunctionsByUser(function.OwnerId)
+	if err != nil {
+		setResponse(w, http.StatusInternalServerError, "error", "Error al obtener funciones del usuario")
 		return
 	}
-
+	for _, f := range existingFunction {
+		if f.Name == function.Name {
+			setResponse(w, http.StatusConflict, "error", "Ya existe una función con ese nombre")
+			return
+		}
+	}
+	authHeader := r.Header.Get("Authorization")
+	userName, err := extractUserFromToken(authHeader)
+	if err != nil {
+		setResponse(w, http.StatusUnauthorized, "error", "Token inválido")
+		return
+	}
+	if userName != function.OwnerId {
+		setResponse(w, http.StatusForbidden, "error", "No tienes permisos para ejecutar esta función")
+		return
+	}
 	err = repository.GetFunctionRepository().CreateFunction(function)
 	if err != nil {
-		setResponse(w, http.StatusInternalServerError, "error", "Error al crear la función")
+		setResponse(w, http.StatusInternalServerError, "error", "Error al registrar la función")
 		return
 	}
-
-	err = repository.GetFunctionRepository().AddFunctionToUser(function.OwnerId, function)
-	if err != nil {
-		setResponse(w, http.StatusInternalServerError, "error", "Error al asociar la función al usuario")
-		return
-	}
-
 	setResponse(w, http.StatusCreated, "success", "Función registrada exitosamente")
 }
 
@@ -52,14 +62,22 @@ func DeleteFunctionHandler(w http.ResponseWriter, r *http.Request) {
 		setResponse(w, http.StatusBadRequest, "error", "Nombre de función requerido")
 		return
 	}
-
-	_, err := repository.GetFunctionRepository().GetByName(functionName)
+	function, err := repository.GetFunctionRepository().GetFunctionByName(functionName)
 	if err != nil {
-		setResponse(w, http.StatusNotFound, "error", "Función no encontrada")
+		setResponse(w, http.StatusNotFound, "error", "Función no encontrada para este usuario")
 		return
 	}
-
-	err = repository.GetFunctionRepository().DeleteFunction(functionName)
+	authHeader := r.Header.Get("Authorization")
+	userName, err := extractUserFromToken(authHeader)
+	if err != nil {
+		setResponse(w, http.StatusUnauthorized, "error", "Token inválido")
+		return
+	}
+	if userName != function.OwnerId {
+		setResponse(w, http.StatusForbidden, "error", "No tienes permisos para eliminar esta función")
+		return
+	}
+	err = repository.GetFunctionRepository().DeleteFunction(function)
 	if err != nil {
 		setResponse(w, http.StatusInternalServerError, "error", "Error al eliminar la función")
 		return
@@ -82,36 +100,31 @@ func ExecuteFunctionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	function, err := repository.GetFunctionRepository().GetByName(functionName)
+	function, err := repository.GetFunctionRepository().GetFunctionByName(functionName)
 	if err != nil {
-		setResponse(w, http.StatusNotFound, "error", "Función no encontrada")
+		setResponse(w, http.StatusNotFound, "error", "Función no encontrada para este usuario")
+		return
+	}
+	authHeader := r.Header.Get("Authorization")
+	userName, err := extractUserFromToken(authHeader)
+	if err != nil {
+		setResponse(w, http.StatusUnauthorized, "error", "Token inválido")
+		return
+	}
+	if userName != function.OwnerId {
+		setResponse(w, http.StatusForbidden, "error", "No tienes permisos para ejecutar esta función")
 		return
 	}
 
-	var input struct {
+	var param struct {
 		Param string `json:"param"`
 	}
-
-	err = json.NewDecoder(r.Body).Decode(&input)
+	err = json.NewDecoder(r.Body).Decode(&param)
 	if err != nil {
-		setResponse(w, http.StatusBadRequest, "error", "Parámetro inválido")
+		setResponse(w, http.StatusBadRequest, "error", "Error al decodificar el parámetro")
 		return
 	}
-
-	result, err := repository.GetFunctionRepository().ExecuteFunction(function, input.Param)
-	if err != nil {
-		if err.Error() == "maximum concurrent executions reached" {
-			setResponse(w, http.StatusServiceUnavailable, "error", "Máximo de ejecuciones concurrentes alcanzado")
-			return
-		}
-		setResponse(w, http.StatusInternalServerError, "error", "Error al ejecutar la función: "+err.Error())
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"result": result,
-	})
+	repository.GetFunctionRepository().PublishFunction(function, param.Param, w)
 }
 
 func GetFunctionsByUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -120,13 +133,46 @@ func GetFunctionsByUserHandler(w http.ResponseWriter, r *http.Request) {
 		setResponse(w, http.StatusBadRequest, "error", "Nombre de usuario requerido")
 		return
 	}
-
-	functions, err := repository.GetFunctionRepository().GetFunctionsByUser(username)
+	function, err := repository.GetFunctionRepository().GetFunctionsByUser(username)
 	if err != nil {
 		setResponse(w, http.StatusInternalServerError, "error", "Error al obtener funciones del usuario")
 		return
 	}
-
+	authHeader := r.Header.Get("Authorization")
+	checkedUser, err := extractUserFromToken(authHeader)
+	if err != nil {
+		setResponse(w, http.StatusUnauthorized, "error", "Token inválido")
+		return
+	}
+	if checkedUser != username {
+		setResponse(w, http.StatusForbidden, "error", "No tienes permisos para acceder a estas funciones")
+		return
+	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(functions)
+	json.NewEncoder(w).Encode(function)
+}
+
+func extractUserFromToken(tokenString string) (string, error) {
+	if strings.HasPrefix(tokenString, "Bearer ") {
+		tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+	} else {
+		return "", fmt.Errorf("token inválido")
+	}
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("método de firma inesperado: %v", token.Header["alg"])
+		}
+		return []byte("kohi"), nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("token inválido: %v", err)
+	}
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		if username, ok := claims["sub"].(string); ok {
+			return username, nil
+		}
+	}
+
+	return "", fmt.Errorf("token inválido o expirado")
 }

@@ -1,162 +1,134 @@
 package main
 
 import (
-    "context"
-    "encoding/json"
-    "fmt"
-    "log"
-    "os"
-    "os/signal"
-    "sync"
-    "syscall"
-    "time"
-    
-    "faas-project/internal/models"
-    "faas-project/internal/repository"
-    "github.com/nats-io/nats.go"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"faas-project/internal/models"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
+	"github.com/nats-io/nats.go"
 )
 
-type Worker struct {
-    id         int
-    repository repository.FunctionRepository
+var url = "nats://nats:4222"
+
+type channelWriter struct {
+	channel chan []byte
 }
 
-func NewWorker(id int, repo repository.FunctionRepository) *Worker {
-    return &Worker{
-        id:         id,
-        repository: repo,
-    }
-}
-
-func (w *Worker) Start(ctx context.Context, jobs <-chan repository.PendingFunction, wg *sync.WaitGroup) {
-    defer wg.Done()
-    
-    for {
-        select {
-        case <-ctx.Done():
-            log.Printf("Trabajador %d apagado\n", w.id)
-            return
-            
-        case pendingFunction, ok := <-jobs:
-            if !ok {
-                log.Printf("Trabajador %d canal de trabajos cerrado, apagando", w.id)
-                return
-            }
-            
-            w.processFunction(pendingFunction)
-        }
-    }
-}
-
-func (w *Worker) processFunction(pendingFunction repository.PendingFunction) {
-    function := pendingFunction.Function
-    //log.Printf("Trabajador %d iniciando procesamiento de función: %s (Imagen: %s)\n", w.id, function.Name, function.Image)
-    
-    result, err := w.executeFunction(function, pendingFunction.Param)
-    if err != nil {
-        log.Printf("Trabajador %d error ejecutando función %s: %v\n", w.id, function.Name, err)
-        return
-    }
-    
-    function.LastExecution = time.Now()
-    function.LastResult = result
-    if err := w.repository.Update(function); err == nil {
-        log.Printf("Trabajador %d actualizó correctamente el estado de la función %s\n", w.id, function.Name)
-    }
-}
-
-func (w *Worker) executeFunction(function models.Function, param string) (string, error) {
-    return w.repository.ExecuteFunction(function, param)
+func (cw channelWriter) Write(p []byte) (n int, err error) {
+	cw.channel <- p
+	return len(p), nil
 }
 
 func main() {
-    const numWorkers = 3
-    
-    os.Setenv("IS_WORKER", "true")
-    
-    log.Printf("Iniciando servicio de trabajador con %d trabajadores", numWorkers)
-    
-    var repo repository.FunctionRepository
-    for i := 0; i < 30; i++ {
-        repo = repository.GetFunctionRepository()
-        if repo != nil {
-            log.Printf("Conectado correctamente a NATS en el intento %d", i+1)
-            break
-        }
-        log.Printf("No se pudo conectar con NATS, esperando 2 segundos antes de volver a intentarlo...")
-        time.Sleep(2 * time.Second)
-    }
-    
-    if repo == nil {
-        log.Fatal("No se pudo conectar con NATS después de varios intentos")
-    }
-    
-    log.Printf("Repositorio inicializado correctamente")
-    
-    jobs := make(chan repository.PendingFunction, 100)
-    
-    ctx, cancel := context.WithCancel(context.Background())
-    defer cancel()
-    
-    var wg sync.WaitGroup
-    for i := 1; i <= numWorkers; i++ {
-        worker := NewWorker(i, repo)
-        wg.Add(1)
-        go worker.Start(ctx, jobs, &wg)
-    }
-    
-    if natsRepo, ok := repo.(*repository.NATSFunctionRepository); ok {
-        js := natsRepo.GetJS()
-        sub, err := js.QueueSubscribe("execution.*", "workers", func(msg *nats.Msg) {
-            var req struct {
-                Function models.Function `json:"function"`
-                Param    string         `json:"param"`
-            }
-            if err := json.Unmarshal(msg.Data, &req); err != nil {
-                log.Printf("Error al deserializar la solicitud de ejecución: %v", err)
-                return
-            }
-            
-            log.Printf("----------------------------------param: %s", req.Param)
-            result, err := repo.ExecuteFunction(req.Function, req.Param)
-            if err != nil {
-                result = fmt.Sprintf("error: %v", err)
-            }
-            
-            js.Publish(fmt.Sprintf("%s.response", msg.Subject), []byte(result))
-        })
-        if err != nil {
-            log.Fatalf("Error al suscribirse a las solicitudes de ejecución: %v", err)
-        }
-        defer sub.Unsubscribe()
-    }
-    
-    sigChan := make(chan os.Signal, 1)
-    signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-    
-    log.Printf("Iniciando despachador de trabajos")
-    go func() {
-        for {
-            pendingFunctions, err := repo.GetPendingExecutions()
-            if err != nil {
-                log.Printf("Error al obtener ejecuciones pendientes: %v\n", err)
-                time.Sleep(5 * time.Second)
-                continue
-            }
-            
-            for _, pendingFunction := range pendingFunctions {
-                log.Printf("Despachando función %s a los trabajadores", pendingFunction.Function.Name)
-                jobs <- pendingFunction
-            }
-            
-            time.Sleep(1 * time.Second)
-        }
-    }()
-    
-    <-sigChan
-    log.Println("Se recibió la señal de apagado")
-    log.Println("Apagando trabajadores...")
-    cancel()
-    wg.Wait()
-    log.Println("Todos los trabajadores apagados correctamente")
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	nc, err := nats.Connect(url)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	nc.QueueSubscribe(
+		"functions.*", "workers",
+		func(msg *nats.Msg) {
+
+			dockerClient, err := client.NewClientWithOpts(client.FromEnv)
+			if err != nil {
+				log.Printf("Error al crear el cliente de Docker: %v", err)
+				return
+			}
+
+			var req struct {
+				Function    models.Function `json:"function"`
+				Param       string          `json:"param"`
+				ContainerId string          `json:"containerId"`
+			}
+			if err := json.Unmarshal(msg.Data, &req); err != nil {
+				log.Printf("Error al deserializar la solicitud de ejecución: %v", err)
+				return
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			hostConfig := &container.HostConfig{
+				AutoRemove:  true,
+				NetworkMode: container.NetworkMode("faas-project_faas-network"),
+			}
+			reader, err := dockerClient.ImagePull(ctx, req.Function.Image, types.ImagePullOptions{})
+			if err != nil {
+				log.Printf("No se ha encontrado la imagen en docker.io: %v", err)
+				return
+			}
+
+			_, err = io.Copy(os.Stdout, reader)
+			if err != nil {
+				log.Printf("Error al copiar la salida del pull: %v", err)
+				return
+			}
+			resp, err := dockerClient.ContainerCreate(ctx, &container.Config{
+				Image:        req.Function.Image,
+				Env:          []string{fmt.Sprintf("PARAM=%s", req.Param)},
+				Tty:          false,
+				AttachStdout: true,
+				AttachStderr: true,
+			}, hostConfig, nil, nil, req.ContainerId)
+			if err != nil {
+				log.Printf("Error al crear el contenedor: %v", err)
+				return
+			}
+			err = dockerClient.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
+			if err != nil {
+				log.Printf("Error al iniciar el contenedor: %v", err)
+				return
+			}
+			logOpts := types.ContainerLogsOptions{
+				ShowStdout: true,
+				ShowStderr: true,
+				Follow:     true,
+			}
+
+			logReader, err := dockerClient.ContainerLogs(ctx, resp.ID, logOpts)
+			if err != nil {
+				return
+			}
+
+			logCh := make(chan []byte, 1)
+			go func() {
+				defer close(logCh)
+				_, err := io.Copy(channelWriter{logCh}, logReader)
+				if err != nil {
+					return
+				}
+			}()
+
+			statusCh, errCh := dockerClient.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+
+			select {
+			case logs := <-logCh:
+				log.Printf("Logs del contenedor: %s", logs)
+				nc.Publish(msg.Reply, logs)
+			case err := <-errCh:
+				log.Printf("Error al esperar a que el contenedor termine: %v", err)
+				nc.Publish(msg.Reply, []byte(err.Error()))
+
+			case status := <-statusCh:
+				log.Printf("Estado del contenedor: %d", status.StatusCode)
+			}
+
+		})
+	<-sigChan
+
 }
