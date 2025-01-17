@@ -64,6 +64,8 @@ services:
         condition: service_healthy
     networks:
       - faas-network
+    environment:
+      - REQUEST_TTL=10
 
   worker1:
     build:

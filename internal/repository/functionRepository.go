@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,6 +33,7 @@ var NatsConnection *nats.Conn
 var jsGlobal nats.JetStreamContext
 
 var natsURL = "nats://nats:4222"
+var REQUEST_TTL, _ = strconv.Atoi(os.Getenv("REQUEST_TTL"))
 
 func cleanDockerOutput(output string) string {
 	if len(output) < 8 {
@@ -94,7 +96,7 @@ func (*NatsFunctionRepository) PublishFunction(function models.Function, param s
 			"status": "success",
 			"result": response,
 		})
-	case <-time.After(30 * time.Second):
+	case <-time.After(time.Duration(REQUEST_TTL) * time.Second):
 		w.WriteHeader(http.StatusGatewayTimeout)
 		json.NewEncoder(w).Encode(map[string]string{
 			"status": "error",
