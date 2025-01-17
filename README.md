@@ -2,11 +2,11 @@
 
 ## Equipo de Desarrollo
 
-| Nombre | 
-|--------|
-| Fernando Garcia Barra |
-| Jefferson Paul Caiza Jami |
-| Pablo Granell Robles |
+| Nombre 					 | 
+|----------------------------|
+| Fernando Garcia Barra      |
+| Jefferson Paul Caiza Jami  |
+| Pablo Granell Robles       |
 
 
 ## IMPORTANTE
@@ -17,6 +17,14 @@ Este WAL se corrompe cuando se cierra el contenedor de etcd incorrectamente y la
 Si al ejecutar el docker-compose hubiera un error fatal en los registros de etcd, es necesario revertir los cambios en WAL y DB, por ejemplo, con un git stash.
 
 Lo hemos probado en Windows con WSL2 y funciona correctamente.
+
+## IMPORTANTE 2
+
+En caso de ejecutarse en linux será necesario ejecutar previamente el siguiente comando para que la carpeta sea visible para los contenedores 
+```
+sudo chmod -R 777 etcd/
+```
+Por limitaciones del contenedor etc será necesario ejecutar este comando cada vez que se vaya a arrancar, ya que internamente puede modificar los permisos
 
 ## Guía de Inicio Rápido
 
