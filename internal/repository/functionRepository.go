@@ -103,104 +103,6 @@ func (*NatsFunctionRepository) PublishFunction(function models.Function, param s
 	}
 }
 
-func (r *NatsFunctionRepository) CreateFunction(function models.Function) error {
-	kv, err := r.js.KeyValue("functions")
-	if err != nil {
-		return err
-	}
-
-	data, err := json.Marshal(function)
-	if err != nil {
-		return err
-	}
-
-	_, err = kv.Put(function.Name, data)
-	return err
-}
-
-func (r *NatsFunctionRepository) GetByName(name string) (models.Function, error) {
-	kv, err := r.js.KeyValue("functions")
-	if err != nil {
-		return models.Function{}, err
-	}
-
-	entry, err := kv.Get(name)
-	if err != nil {
-		if err == nats.ErrKeyNotFound {
-			return models.Function{}, fmt.Errorf("función %s no encontrada", name)
-		}
-		return models.Function{}, err
-	}
-
-	var function models.Function
-	err = json.Unmarshal(entry.Value(), &function)
-	if err != nil {
-		return models.Function{}, err
-	}
-
-	return function, nil
-}
-
-func (r *NatsFunctionRepository) DeleteFunction(name string) error {
-	kv, err := r.js.KeyValue("functions")
-	if err != nil {
-		return err
-	}
-
-	entry, err := kv.Get(name)
-	if err != nil {
-		return err
-	}
-
-	var function models.Function
-	err = json.Unmarshal(entry.Value(), &function)
-	if err != nil {
-		return err
-	}
-
-	err = kv.Delete(name)
-	if err != nil {
-		return err
-	}
-
-	kvUserFunctions, err := r.js.KeyValue("user_functions")
-	if err != nil {
-		return err
-	}
-
-	userFunctionsEntry, err := kvUserFunctions.Get(function.OwnerId)
-	if err != nil {
-		if err == nats.ErrKeyNotFound {
-			return nil
-		}
-		return err
-	}
-
-	var functions []models.Function
-	err = json.Unmarshal(userFunctionsEntry.Value(), &functions)
-	if err != nil {
-		return err
-	}
-
-	updatedFunctions := []models.Function{}
-	for _, fn := range functions {
-		if fn.Name != name {
-			updatedFunctions = append(updatedFunctions, fn)
-		}
-	}
-
-	data, err := json.Marshal(updatedFunctions)
-	if err != nil {
-		return err
-	}
-
-	_, err = kvUserFunctions.Put(function.OwnerId, data)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
 func GetFunctionRepository() *NatsFunctionRepository {
 	if NatsConnection == nil || jsGlobal == nil {
 		return initFunctionRepository()
@@ -240,61 +142,132 @@ func initFunctionRepository() *NatsFunctionRepository {
 	}
 	NatsConnection = nc
 	jsGlobal = js
-	
+
 	return &NatsFunctionRepository{
 		conn: nc,
 		js:   js,
 	}
 }
-
-func (r *NatsFunctionRepository) AddFunctionToUser(username string, function models.Function) error {
+func (r *NatsFunctionRepository) CreateFunction(function models.Function) error {
 	kv, err := r.js.KeyValue("user_functions")
 	if err != nil {
 		return err
 	}
-
-	entry, err := kv.Get(username)
+	userFunctionsEntry, err := kv.Get(function.OwnerId)
 	var functions []models.Function
-	if err == nil {
-		err = json.Unmarshal(entry.Value(), &functions)
+
+	if err != nil {
+		if err == nats.ErrKeyNotFound {
+			functions = []models.Function{}
+		} else {
+			return err
+		}
+	} else {
+		err = json.Unmarshal(userFunctionsEntry.Value(), &functions)
 		if err != nil {
 			return err
 		}
-	} else if err != nats.ErrKeyNotFound {
-		return err
 	}
 
 	functions = append(functions, function)
-
 	data, err := json.Marshal(functions)
 	if err != nil {
 		return err
 	}
 
-	_, err = kv.Put(username, data)
+	_, err = kv.Put(function.OwnerId, data)
 	return err
 }
 
-func (r *NatsFunctionRepository) GetFunctionsByUser(username string) ([]models.Function, error) {
+func (r *NatsFunctionRepository) GetFunctionByName(name string) (models.Function, error) {
+	kv, err := r.js.KeyValue("user_functions")
+	if err != nil {
+		return models.Function{}, err
+	}
+
+	allUsers, err := kv.Keys()
+	if err != nil {
+		return models.Function{}, err
+	}
+
+	for _, userId := range allUsers {
+		entry, err := kv.Get(userId)
+		if err != nil {
+			continue
+		}
+
+		var functions []models.Function
+		err = json.Unmarshal(entry.Value(), &functions)
+		if err != nil {
+			continue
+		}
+
+		for _, function := range functions {
+			if function.Name == name {
+				return function, nil
+			}
+		}
+	}
+
+	return models.Function{}, fmt.Errorf("function not found")
+}
+
+func (r *NatsFunctionRepository) DeleteFunction(function models.Function) error {
+	kv, err := r.js.KeyValue("user_functions")
+	if err != nil {
+		return err
+	}
+
+	entry, err := kv.Get(function.OwnerId)
+	if err != nil {
+		return err
+	}
+
+	var functions []models.Function
+	err = json.Unmarshal(entry.Value(), &functions)
+	if err != nil {
+		return err
+	}
+
+	var updatedFunctions []models.Function
+	for _, f := range functions {
+		if f.Name != function.Name {
+			updatedFunctions = append(updatedFunctions, f)
+		}
+	}
+
+	data, err := json.Marshal(updatedFunctions)
+	if err != nil {
+		return err
+	}
+
+	_, err = kv.Put(function.OwnerId, data)
+	return err
+}
+
+func (r *NatsFunctionRepository) GetFunctionsByUser(ownerId string) ([]models.Function, error) {
 	kv, err := r.js.KeyValue("user_functions")
 	if err != nil {
 		return nil, err
 	}
 
-	entry, err := kv.Get(username)
+	entry, err := kv.Get(ownerId)
 	if err != nil {
 		if err == nats.ErrKeyNotFound {
 			return []models.Function{}, nil
 		}
 		return nil, err
 	}
-
 	var functions []models.Function
 	err = json.Unmarshal(entry.Value(), &functions)
 	if err != nil {
-		return nil, err
+		var singleFunction models.Function
+		err = json.Unmarshal(entry.Value(), &singleFunction)
+		if err != nil {
+			return nil, err
+		}
+		functions = []models.Function{singleFunction}
 	}
-
 	return functions, nil
 }
 

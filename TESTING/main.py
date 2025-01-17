@@ -10,13 +10,10 @@ def analyze_sentiment(text: str) -> dict:
     return sia.polarity_scores(text)
 
 def main():
-    # Intentar leer el parámetro de diferentes fuentes
     param = None
     
-    # 1. Intentar leer de la variable de entorno
     param = os.getenv('PARAM')
     
-    # 2. Si está vacío, intentar leer de stdin
     if not param:
         try:
             input_data = sys.stdin.read()
@@ -28,19 +25,17 @@ def main():
                     param = input_data.strip()
         except:
             pass
-    
-    # 3. Si aún está vacío, usar valor por defecto
     if not param:
         param = 'Texto de prueba'
     
     sentiment = analyze_sentiment(param)
     
     if sentiment['compound'] >= 0.05:
-        print("Sentimiento: Positivo")
+        print("Texto: ", param, "Sentimiento: Positivo")
     elif sentiment['compound'] <= -0.05:
-        print("Sentimiento: Negativo")
+        print("Texto: ", param, "Sentimiento: Negativo")
     else:
-        print("Sentimiento: Neutral")
+        print("Texto: ", param, "Sentimiento: Neutral")
 
 if __name__ == "__main__":
     main() 

@@ -40,6 +40,12 @@ docker build -t functionbyuser .
 timeout /t 2
 
 echo _________________________________________________________________________
+echo Obteniendo todas las funciones asociadas con testuser antes de la eliminación...
+curl -X GET "http://localhost:8080/functions?username=testuser" ^
+     -H "Authorization: Bearer %TOKEN%"
+echo _________________________________________________________________________
+
+echo _________________________________________________________________________
 echo Registrando función para testuser...
 curl -X POST -H "Content-Type: application/json" ^
      -d "{\"id\": \"1\", \"name\": \"testfunction1\", \"ownerId\": \"testuser\", \"image\": \"functionbyuser\"}" ^
@@ -70,6 +76,26 @@ echo _________________________________________________________________________
 echo _________________________________________________________________________
 echo Obteniendo todas las funciones asociadas con testuser después de la eliminación...
 curl -X GET "http://localhost:8080/functions?username=testuser" ^
+     -H "Authorization: Bearer %TOKEN%"
+echo _________________________________________________________________________
+
+echo _________________________________________________________________________
+echo Registrando función para testuser...
+curl -X POST -H "Content-Type: application/json" ^
+     -d "{\"id\": \"1\", \"name\": \"testfunction1\", \"ownerId\": \"testuser\", \"image\": \"functionbyuser\"}" ^
+     http://localhost:8080/function ^
+     -H "Authorization: Bearer %TOKEN%"
+echo _________________________________________________________________________
+
+echo _________________________________________________________________________
+echo Obteniendo todas las funciones asociadas con testuser después de la eliminación...
+curl -X GET "http://localhost:8080/functions?username=testuser" ^
+     -H "Authorization: Bearer %TOKEN%"
+echo _________________________________________________________________________
+
+echo _________________________________________________________________________
+echo Eliminando testfunction1...
+curl -X DELETE http://localhost:8080/function/testfunction1 ^
      -H "Authorization: Bearer %TOKEN%"
 echo _________________________________________________________________________
 
