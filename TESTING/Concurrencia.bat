@@ -19,14 +19,10 @@ FOR /F "delims=" %%i IN ('powershell -NoProfile -Command ^
 
 DEL login_response.json
 
-cd TESTING/emociones
-docker build -t emociones .
-cd ../..
-
 echo Registrando multiples funciones de prueba...
 for /l %%i in (1,1,6) do (
     curl -X POST -H "Content-Type: application/json" ^
-         -d "{\"name\": \"testfunction%%i\", \"ownerId\": \"testuser\", \"image\": \"emociones\"}" ^
+         -d "{\"name\": \"testfunction%%i\", \"ownerId\": \"testuser\", \"image\": \"pablogranell/emociones\"}" ^
          http://localhost:9080/function ^
          -H "Authorization: Bearer %TOKEN%"
 )
@@ -37,7 +33,7 @@ start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \
 start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"rage\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
 start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"bubbly\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
 start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"sadness\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
-timeout /t 6
+timeout /t 2
 
 echo Ejecutando diferentes funciones simultaneamente...
 start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"envy\"}" http://localhost:9080/function/testfunction1 -H "Authorization: Bearer %TOKEN%""
@@ -46,7 +42,7 @@ start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \
 start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"clown\"}" http://localhost:9080/function/testfunction4 -H "Authorization: Bearer %TOKEN%""
 start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"drunk\"}" http://localhost:9080/function/testfunction5 -H "Authorization: Bearer %TOKEN%""
 start cmd /k "curl -X POST -H "Content-Type: application/json" -d "{\"param\": \"sober\"}" http://localhost:9080/function/testfunction6 -H "Authorization: Bearer %TOKEN%""
-timeout /t 6
+timeout /t 10
 
 echo Limpieza...
 for /l %%i in (1,1,6) do (

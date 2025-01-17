@@ -107,5 +107,4 @@ echo Eliminando testfunction1...
 curl -X DELETE http://localhost:9080/function/testfunction1 ^
      -H "Authorization: Bearer %TOKEN%"
 echo Prueba completada.
-cd ..
 pause

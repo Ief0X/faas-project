@@ -76,7 +76,6 @@ func (*NatsFunctionRepository) PublishFunction(function models.Function, param s
 	responseChan := make(chan string)
 
 	sub, err := nc.Subscribe(replySubject, func(msg *nats.Msg) {
-		log.Printf("Respuesta de ejecución222222: %s", string(msg.Data))
 		cleanOuput := cleanDockerOutput(string(msg.Data))
 		responseChan <- cleanOuput
 	})
