@@ -7,11 +7,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
-	"sync"
 	"time"
 
-	"github.com/docker/docker/client"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 )
@@ -26,24 +23,13 @@ type ExecutionRequest struct {
 	Param       string          `json:"param"`
 	ContainerId string          `json:"containerId"`
 }
-
-type FunctionRepository interface {
-	CreateFunction(function models.Function) error
-	GetByName(name string) (models.Function, error)
-	DeleteFunction(name string) error
-	AddFunctionToUser(username string, function models.Function) error
-	GetFunctionsByUser(username string) ([]models.Function, error)
-	GetPendingExecutions() ([]PendingFunction, error)
-	Update(function models.Function) error
-	GetJS() nats.JetStreamContext
+type NatsFunctionRepository struct {
+	conn *nats.Conn
+	js   nats.JetStreamContext
 }
 
-type NATSFunctionRepository struct {
-	js             nats.JetStreamContext
-	docker         *client.Client
-	containerLocks sync.Map
-	maxConcurrent  int
-}
+var NatsConnection *nats.Conn
+var jsGlobal nats.JetStreamContext
 
 var natsURL = "nats://nats:4222"
 
@@ -53,7 +39,7 @@ func cleanDockerOutput(output string) string {
 	}
 	return output[8:]
 }
-func (r *NATSFunctionRepository) PublishFunction(function models.Function, param string, w http.ResponseWriter) {
+func (*NatsFunctionRepository) PublishFunction(function models.Function, param string, w http.ResponseWriter) {
 
 	nc, err := nats.Connect(natsURL)
 	if err != nil {
@@ -117,19 +103,7 @@ func (r *NATSFunctionRepository) PublishFunction(function models.Function, param
 	}
 }
 
-func NewNATSFunctionRepository(js nats.JetStreamContext) *NATSFunctionRepository {
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		panic(err)
-	}
-	return &NATSFunctionRepository{
-		js:            js,
-		docker:        cli,
-		maxConcurrent: 5,
-	}
-}
-
-func (r *NATSFunctionRepository) CreateFunction(function models.Function) error {
+func (r *NatsFunctionRepository) CreateFunction(function models.Function) error {
 	kv, err := r.js.KeyValue("functions")
 	if err != nil {
 		return err
@@ -144,7 +118,7 @@ func (r *NATSFunctionRepository) CreateFunction(function models.Function) error 
 	return err
 }
 
-func (r *NATSFunctionRepository) GetByName(name string) (models.Function, error) {
+func (r *NatsFunctionRepository) GetByName(name string) (models.Function, error) {
 	kv, err := r.js.KeyValue("functions")
 	if err != nil {
 		return models.Function{}, err
@@ -167,7 +141,7 @@ func (r *NATSFunctionRepository) GetByName(name string) (models.Function, error)
 	return function, nil
 }
 
-func (r *NATSFunctionRepository) DeleteFunction(name string) error {
+func (r *NatsFunctionRepository) DeleteFunction(name string) error {
 	kv, err := r.js.KeyValue("functions")
 	if err != nil {
 		return err
@@ -227,8 +201,17 @@ func (r *NATSFunctionRepository) DeleteFunction(name string) error {
 
 	return nil
 }
-
-func GetFunctionRepository() *NATSFunctionRepository {
+func GetFunctionRepository() *NatsFunctionRepository {
+	if NatsConnection == nil || jsGlobal == nil {
+		return initFunctionRepository()
+	} else {
+		return &NatsFunctionRepository{
+			conn: NatsConnection,
+			js:   jsGlobal,
+		}
+	}
+}
+func initFunctionRepository() *NatsFunctionRepository {
 	natsURL := os.Getenv("NATS_URL")
 	if natsURL == "" {
 		natsURL = "nats://nats:4222"
@@ -239,29 +222,10 @@ func GetFunctionRepository() *NATSFunctionRepository {
 		log.Printf("Error al conectar con NATS: %v", err)
 		return nil
 	}
-
+	NatsConnection = nc
 	js, err := nc.JetStream()
 	if err != nil {
 		log.Printf("Error al obtener el contexto de JetStream: %v", err)
-		nc.Close()
-		return nil
-	}
-
-	_, err = js.AddStream(&nats.StreamConfig{
-		Name:     "EXECUTIONS",
-		Subjects: []string{"execution.>"},
-	})
-	if err != nil && !strings.Contains(err.Error(), "stream name already in use") {
-		log.Printf("Error al crear el stream de ejecuciones: %v", err)
-		nc.Close()
-		return nil
-	}
-
-	_, err = js.CreateKeyValue(&nats.KeyValueConfig{
-		Bucket: "functions",
-	})
-	if err != nil && err.Error() != "stream name already in use" {
-		log.Printf("Error al crear el bucket de funciones: %v", err)
 		nc.Close()
 		return nil
 	}
@@ -274,11 +238,13 @@ func GetFunctionRepository() *NATSFunctionRepository {
 		nc.Close()
 		return nil
 	}
-
-	return NewNATSFunctionRepository(js)
+	return &NatsFunctionRepository{
+		conn: nc,
+		js:   js,
+	}
 }
 
-func (r *NATSFunctionRepository) AddFunctionToUser(username string, function models.Function) error {
+func (r *NatsFunctionRepository) AddFunctionToUser(username string, function models.Function) error {
 	kv, err := r.js.KeyValue("user_functions")
 	if err != nil {
 		return err
@@ -306,7 +272,7 @@ func (r *NATSFunctionRepository) AddFunctionToUser(username string, function mod
 	return err
 }
 
-func (r *NATSFunctionRepository) GetFunctionsByUser(username string) ([]models.Function, error) {
+func (r *NatsFunctionRepository) GetFunctionsByUser(username string) ([]models.Function, error) {
 	kv, err := r.js.KeyValue("user_functions")
 	if err != nil {
 		return nil, err
@@ -329,58 +295,7 @@ func (r *NATSFunctionRepository) GetFunctionsByUser(username string) ([]models.F
 	return functions, nil
 }
 
-func (r *NATSFunctionRepository) GetPendingExecutions() ([]PendingFunction, error) {
-	kv, err := r.js.KeyValue("functions")
-	if err != nil {
-		return nil, err
-	}
-
-	entries, err := kv.Keys()
-	if err != nil {
-		if err == nats.ErrNoKeysFound {
-			return []PendingFunction{}, nil
-		}
-		return nil, err
-	}
-
-	var pendingFunctions []PendingFunction
-	now := time.Now()
-
-	for _, key := range entries {
-		lockKey := fmt.Sprintf("pending_lock_%s", key)
-		if _, exists := r.containerLocks.LoadOrStore(lockKey, true); exists {
-			continue
-		}
-
-		go func(k string) {
-			time.Sleep(30 * time.Second)
-			r.containerLocks.Delete(fmt.Sprintf("pending_lock_%s", k))
-		}(key)
-
-		entry, err := kv.Get(key)
-		if err != nil {
-			continue
-		}
-
-		var function models.Function
-		if err := json.Unmarshal(entry.Value(), &function); err != nil {
-			continue
-		}
-
-		if function.NextExecution.IsZero() || function.NextExecution.Before(now) {
-			if function.LastExecution.IsZero() || function.LastExecution.Before(function.NextExecution) {
-				pendingFunctions = append(pendingFunctions, PendingFunction{
-					Function: function,
-					Param:    fmt.Sprintf("test%d", len(pendingFunctions)+1),
-				})
-			}
-		}
-	}
-
-	return pendingFunctions, nil
-}
-
-func (r *NATSFunctionRepository) Update(function models.Function) error {
+func (r *NatsFunctionRepository) Update(function models.Function) error {
 	kv, err := r.js.KeyValue("functions")
 	if err != nil {
 		return err
@@ -395,6 +310,6 @@ func (r *NATSFunctionRepository) Update(function models.Function) error {
 	return err
 }
 
-func (r *NATSFunctionRepository) GetJS() nats.JetStreamContext {
+func (r *NatsFunctionRepository) GetJS() nats.JetStreamContext {
 	return r.js
 }
